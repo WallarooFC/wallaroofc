@@ -22,6 +22,11 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       SKIP_ENV_VALIDATION: "true",
+      NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key",
+      NEXT_PUBLIC_PORTAL_URL: "http://localhost:3000",
+      NEXT_PUBLIC_PUBLIC_SITE_URL: "https://wallaroofc.com.au",
+      ALLOW_LIST_EMAILS: "secretary@wallaroofc.com.au",
     },
   },
 });

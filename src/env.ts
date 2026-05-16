@@ -18,15 +18,7 @@ export const env = createEnv({
     MICROSOFT_OAUTH_CLIENT_ID: z.string().min(1),
     MICROSOFT_OAUTH_CLIENT_SECRET: z.string().min(1),
     MICROSOFT_OAUTH_TENANT_ID: z.string().min(1).default("common"),
-    ALLOW_LIST_EMAILS: z
-      .string()
-      .min(1)
-      .transform((value) =>
-        value
-          .split(",")
-          .map((email) => email.trim().toLowerCase())
-          .filter(Boolean),
-      ),
+    ALLOW_LIST_EMAILS: z.string().min(1),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
