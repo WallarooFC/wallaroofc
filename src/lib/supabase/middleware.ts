@@ -25,7 +25,11 @@ function redirectTo(request: NextRequest, pathname: string, next?: string | null
 }
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  let response = NextResponse.next({ request });
+  // Surface the pathname to Server Components -- headers() can read this.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     env.NEXT_PUBLIC_SUPABASE_URL,
@@ -37,7 +41,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           for (const { name, value } of cookiesToSet) {
             request.cookies.set(name, value);
           }
-          response = NextResponse.next({ request });
+          response = NextResponse.next({ request: { headers: requestHeaders } });
           for (const { name, value, options } of cookiesToSet) {
             response.cookies.set(name, value, options);
           }
