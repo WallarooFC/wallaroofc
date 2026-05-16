@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * Wallaroo FC brand theme tokens.
+ * Source of truth: reference/CLAUDE_CODE_PROMPT.md + brand system supplied
+ * by the website team. Brand red (#C8102E) is reserved for CTAs and the
+ * 3px hero border; status chips use distinct semantic tokens so they don't
+ * compete with the primary accent.
+ * --------------------------------------------------------------------------- */
+@theme {
+  --color-wfc-red: #c8102e;
+  --color-wfc-red-deep: #8e0b20;
+  --color-wfc-blue: #14315c;
+  --color-wfc-blue-deep: #0a1f3d;
+  --color-wfc-blue-darkest: #050e1f;
+  --color-wfc-white: #ffffff;
+  --color-wfc-cream: #f5f1e8;
+  --color-wfc-charcoal: #15171c;
+  --color-wfc-grey: #595d63;
+  --color-wfc-line: #dad3c2;
+
+  --color-wfc-status-green: #3d7a3a;
+  --color-wfc-status-amber: #c47b1f;
+  --color-wfc-status-red: #a8252b;
+
+  --font-display: var(--font-display), "Impact", system-ui, sans-serif;
+  --font-headline: var(--font-headline), "Impact", system-ui, sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
+  --font-body: var(--font-body), system-ui, sans-serif;
+
+  --breakpoint-3xl: 1600px;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-wfc-cream);
+    color: var(--color-wfc-charcoal);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle ledger-line gradient on the page background — mirrors the mockup. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 31px,
+      rgba(20, 49, 92, 0.05) 32px
+    );
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-wfc-red);
+    outline-offset: 2px;
+  }
+}
