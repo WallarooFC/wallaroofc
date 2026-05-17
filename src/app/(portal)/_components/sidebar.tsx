@@ -71,7 +71,7 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-export function Sidebar({
+export function SidebarContent({
   pathname,
   user,
 }: {
@@ -86,7 +86,7 @@ export function Sidebar({
     .toUpperCase();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 flex-col gap-6 overflow-y-auto border-r-4 border-wfc-red bg-wfc-blue-deep px-5 py-6 text-wfc-cream lg:flex">
+    <div className="flex h-full flex-col gap-6 overflow-y-auto bg-wfc-blue-deep px-5 py-6 text-wfc-cream">
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-md border border-wfc-cream/25 bg-wfc-blue-darkest/60 font-headline text-xl tracking-widest">
           W
@@ -143,7 +143,7 @@ export function Sidebar({
 
       <div className="mt-auto flex flex-col gap-3 border-t border-wfc-cream/15 pt-4">
         <div className="font-mono text-[10px] tracking-[0.18em] text-wfc-cream/55">
-          SEASON 2026 · ROUND 04
+          SEASON {new Date().getFullYear()}
         </div>
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full border border-wfc-cream/30 bg-wfc-blue-darkest/60 font-mono text-xs">
@@ -158,6 +158,20 @@ export function Sidebar({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+export function Sidebar({
+  pathname,
+  user,
+}: {
+  pathname: string;
+  user: { fullName: string; role: string };
+}) {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-[256px] shrink-0 border-r-4 border-wfc-red lg:flex">
+      <SidebarContent pathname={pathname} user={user} />
     </aside>
   );
 }

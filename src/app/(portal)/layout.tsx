@@ -3,9 +3,10 @@ import type { ReactNode } from "react";
 
 import { requireUser } from "@/lib/auth/session";
 
-import { Sidebar } from "./_components/sidebar";
-import { Topbar } from "./_components/topbar";
 import { ArchitectureStrip } from "./_components/architecture-strip";
+import { MobileNav } from "./_components/mobile-nav";
+import { Sidebar, SidebarContent } from "./_components/sidebar";
+import { Topbar } from "./_components/topbar";
 
 const BREADCRUMBS: Array<{ prefix: string; label: string }> = [
   { prefix: "/playhq-inbox", label: "PlayHQ Inbox" },
@@ -41,12 +42,21 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const pathname =
     hdrs.get("x-pathname") ?? hdrs.get("x-invoke-path") ?? hdrs.get("next-url") ?? "/";
 
+  const userProps = { fullName, role };
+
   return (
     <div className="flex min-h-screen bg-wfc-cream">
-      <Sidebar pathname={pathname} user={{ fullName, role }} />
+      <Sidebar pathname={pathname} user={userProps} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar breadcrumb={breadcrumbFor(pathname)} />
-        <main className="flex-1 px-6 py-6 lg:px-10 lg:py-8">{children}</main>
+        <Topbar
+          breadcrumb={breadcrumbFor(pathname)}
+          mobileMenuSlot={
+            <MobileNav>
+              <SidebarContent pathname={pathname} user={userProps} />
+            </MobileNav>
+          }
+        />
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{children}</main>
         <ArchitectureStrip />
       </div>
     </div>
