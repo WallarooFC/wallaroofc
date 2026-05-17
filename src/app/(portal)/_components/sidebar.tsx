@@ -8,6 +8,7 @@ import {
   Inbox,
   LayoutGrid,
   Send,
+  Settings,
   Shield,
   Ticket,
   Trophy,
@@ -65,6 +66,7 @@ const SECTIONS: NavSection[] = [
       { href: "/agendas" as Route, label: "Agendas & Minutes", Icon: FileText },
       { href: "/compliance" as Route, label: "Compliance", Icon: Shield },
       { href: "/comms" as Route, label: "Comms / Mail-merge", Icon: Send },
+      { href: "/settings" as Route, label: "Settings & Audit", Icon: Settings },
     ],
   },
 ];
