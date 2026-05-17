@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/daily-sweep",
+      "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/match-day-pack",
+      "schedule": "30 7 * * 5"
+    },
+    {
+      "path": "/api/cron/roster-chase",
+      "schedule": "30 22-7 * * 5-6"
+    }
+  ]
+}
