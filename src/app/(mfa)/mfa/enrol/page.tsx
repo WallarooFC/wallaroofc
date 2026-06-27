@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CrestMark } from "@/components/brand/CrestMark";
+import { BRAND } from "@/lib/brand";
 
 import { EnrolForm } from "./enrol-form";
 
@@ -12,10 +13,10 @@ export default function EnrolPage() {
   return (
     <div className="border-wfc-line w-full max-w-md rounded-lg border bg-white p-8 shadow-[0_4px_24px_rgba(20,49,92,0.08)]">
       <div className="mb-6 flex items-center gap-3">
-        <CrestMark className="h-10 w-10" />
+        <CrestMark size={40} />
         <div>
           <div className="font-headline text-wfc-grey text-[10px] tracking-[0.22em] uppercase">
-            Wallaroo FC · Secretary Portal
+            {BRAND.shortName} · Secretary Portal
           </div>
           <div className="font-display text-wfc-blue-deep text-lg tracking-[0.08em] uppercase">
             Two-factor setup

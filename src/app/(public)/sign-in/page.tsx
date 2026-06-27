@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CrestMark } from "@/components/brand/CrestMark";
+import { BRAND } from "@/lib/brand";
 import { env } from "@/env";
 
 import { SignInForm } from "./sign-in-form";
@@ -20,8 +21,9 @@ function safeHost(url: string | undefined, fallback: string): string {
 }
 
 export default function SignInPage() {
-  const publicSiteHost = safeHost(env.NEXT_PUBLIC_PUBLIC_SITE_URL, "wallaroofc.com");
-  const portalHost = safeHost(env.NEXT_PUBLIC_PORTAL_URL, "portal.wallaroofc.com");
+  const publicSiteUrl = env.NEXT_PUBLIC_PUBLIC_SITE_URL ?? BRAND.contact.publicSiteUrl;
+  const publicSiteHost = safeHost(publicSiteUrl, BRAND.contact.publicSite);
+  const portalHost = safeHost(env.NEXT_PUBLIC_PORTAL_URL, `portal.${BRAND.contact.publicSite}`);
   const emailDomain = `@${publicSiteHost}`;
 
   return (
@@ -45,10 +47,10 @@ export default function SignInPage() {
         />
 
         <div className="relative z-10 flex items-center gap-3.5">
-          <CrestMark className="h-13 w-13" />
+          <CrestMark size={54} />
           <div>
             <div className="font-display text-2xl leading-none tracking-[0.1em] uppercase">
-              Wallaroo FC
+              {BRAND.shortName}
             </div>
             <div className="font-headline text-wfc-cream/75 mt-1 text-[11px] tracking-[0.22em] uppercase">
               Secretary Portal
@@ -58,7 +60,7 @@ export default function SignInPage() {
 
         <div className="relative z-10 max-w-md">
           <div className="font-headline text-wfc-cream/65 mb-4 text-xs tracking-[0.36em] uppercase">
-            Est. 1888 · Yorke Peninsula
+            Est. {BRAND.established} · {BRAND.region}
           </div>
           <h1 className="mb-4 font-serif text-[44px] leading-[1.05] font-semibold tracking-tight">
             The business of the club,{" "}
@@ -74,7 +76,7 @@ export default function SignInPage() {
         <div className="font-headline text-wfc-cream/55 relative z-10 flex items-end justify-between text-[10px] tracking-[0.15em] uppercase">
           <span>v0.2 prototype</span>
           <span>
-            <a href={env.NEXT_PUBLIC_PUBLIC_SITE_URL} className="text-wfc-cream hover:underline">
+            <a href={publicSiteUrl} className="text-wfc-cream hover:underline">
               ↗ View public site
             </a>{" "}
             · {publicSiteHost}
