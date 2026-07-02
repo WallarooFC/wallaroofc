@@ -8,8 +8,9 @@ Repo: `tristanorre/wallaroofc`.
 Since the monorepo refactor the layout is:
 
 - `portal/` — Next.js 15 admin portal, TypeScript strict, Tailwind v4,
-  `@supabase/ssr`. **Intended** domain `portal.wallaroofc.com` — see
-  "Deployment status" below; **not deployed yet**.
+  `@supabase/ssr`. Deployed via the `wallaroofc-portal` Vercel project
+  (root `portal/`) with `portal.wallaroofc.com` attached — see
+  "Deployment status" below.
 - `public/` — Astro 6 SSR site, deployed to `wallaroofc.com` (live).
 - `supabase/migrations/` — shared Postgres schema against project
   `linaudktxwrqelngffol` in WallarooFC's Org (owner `admin@wallaroofc.com.au`).
@@ -19,14 +20,15 @@ build context before touching anything.
 
 ## Deployment status (verified 2026-07-02)
 
-- **Website** — live. One Vercel project `wallaroo-fc` (framework `astro`)
-  builds `public/`; production is READY on `main` with `wallaroofc.com` /
-  `www.wallaroofc.com` attached.
-- **Portal** — **NOT deployed.** There is no Vercel project for the Next.js
-  portal, no build, and no `portal.wallaroofc.com`. The feature code is
-  complete, but the portal has to be *created* as a deployment before the
-  public widget/API are reachable. This is a prerequisite for the sanity
-  check and the Astro integration below.
+Two Vercel projects, both under team `admin-69071042's projects`:
+
+- **Website** — `wallaroo-fc` (framework `astro`, root `public/`). Production
+  READY on `main` with `wallaroofc.com` / `www.wallaroofc.com` attached. Live.
+- **Portal** — `wallaroofc-portal` (framework `nextjs`, root `portal/`),
+  created 2026-07-02. `portal.wallaroofc.com` is attached and PR preview
+  deployments build READY. Confirm a production deployment from `main` and
+  that `portal.wallaroofc.com` resolves before relying on the public
+  widget/API endpoints.
 - **Supabase MCP** — the Wallaroo DB (`linaudktxwrqelngffol`) is owned by
   `admin@wallaroofc.com.au`. If the MCP lists only unrelated orgs
   (ORRE/TAJJPI/TR Depledge/`orre-app`), it is signed into the wrong account —
@@ -95,10 +97,12 @@ secretary/president/treasurer/committee full CRUD.
 1. **Apply migration 005** to `linaudktxwrqelngffol`.
 2. **Seed** the Thursday Night templates
    (`supabase/seeds/001_thursday_night.sql`) after the migration is applied.
-2b. **Deploy the portal** — create a Vercel project rooted at `portal/`
-    (Next.js 15), add env vars from `portal/src/env.ts`, attach
-    `portal.wallaroofc.com`. Steps 3–4 depend on this; the widget/API are
-    unreachable until the portal is live.
+2b. **Confirm the portal is production-live** — the `wallaroofc-portal`
+    Vercel project (root `portal/`, `portal.wallaroofc.com` attached) already
+    exists and deploys. Verify a production deploy from `main`, that
+    `portal.wallaroofc.com` resolves, and that env vars from
+    `portal/src/env.ts` are set in that project. Steps 3–4 depend on the
+    portal being reachable.
 3. **Sanity check** — sign in at `/sign-in` (magic-link to an email on
    `ALLOW_LIST_EMAILS`, since Microsoft OAuth isn't wired), open `/templates`
    and `/takeovers`, schedule the Thursday Night takeover for a test window,
