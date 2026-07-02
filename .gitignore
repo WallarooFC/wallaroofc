@@ -1,0 +1,33 @@
+# env files (do not commit)
+.env
+.env*.local
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Monorepo node_modules (each app has its own)
+node_modules/
+
+# portal/ (Next.js)
+portal/node_modules/
+portal/.next/
+portal/out/
+portal/build/
+portal/coverage/
+portal/playwright-report/
+portal/test-results/
+portal/.pnp
+portal/.pnp.*
+
+# public/ (Astro)
+public/node_modules/
+public/dist/
+public/.astro/
+public/.vercel/
+
+# Vercel
+.vercel

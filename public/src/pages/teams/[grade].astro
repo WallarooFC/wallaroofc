@@ -1,0 +1,242 @@
+---
+import { getCollection } from 'astro:content';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import Crest from '../../components/Crest.astro';
+import { GRADES, type GradeMeta } from '../../lib/grades.ts';
+
+export async function getStaticPaths() {
+  const { GRADES } = await import('../../lib/grades.ts');
+  return GRADES.map(g => ({
+    params: { grade: g.slug },
+    props: { grade: g },
+  }));
+}
+
+interface Props {
+  grade: GradeMeta;
+}
+
+const { grade } = Astro.props as Props;
+
+// Pull this grade's current ladder, if available
+const allLadders = await getCollection('ladders');
+const ladder = grade.ladderId ? allLadders.find(l => l.id === grade.ladderId)?.data : undefined;
+const ourRow = ladder?.rows.find(r => r.slug === 'wallaroo');
+
+// Wallaroo's full-season fixtures (same for all grades — only the bounce time varies)
+const fixtures = (await getCollection('fixtures'))
+  .map(e => e.data)
+  .sort((a, b) => a.round - b.round);
+---
+<PageLayout
+  title={`${grade.displayName} · Wallaroo FC`}
+  description={`${grade.displayName} at Wallaroo Football Club. ${grade.bounceTime} bounce every Saturday during the YPFL season.`}
+>
+  <PageHero
+    eyebrow={`Bulldogs ${grade.shortName}`}
+    title={grade.shortName}
+    titleItalic={grade.ageBracket}
+    intro={grade.description}
+  />
+
+  <section class="grade-page">
+    <div class="container">
+      <div class="meta-grid">
+        <div class="meta-card">
+          <div class="label">Bounce Time</div>
+          <div class="value">{grade.bounceTime}</div>
+          <div class="sub">{grade.duration}</div>
+        </div>
+        <div class="meta-card">
+          <div class="label">Training</div>
+          <div class="value small">{grade.trainingNight}</div>
+          <div class="sub">Wallaroo Oval</div>
+        </div>
+        <div class="meta-card">
+          <div class="label">Coach</div>
+          <div class="value">{grade.coach}</div>
+          <div class="sub">2026 season</div>
+        </div>
+        {ourRow ? (
+          <div class="meta-card highlight">
+            <div class="label">Current Ladder</div>
+            <div class="value">{ourRow.pos}<span class="rank-suffix">{ourRow.pos === 1 ? 'st' : ourRow.pos === 2 ? 'nd' : ourRow.pos === 3 ? 'rd' : 'th'}</span></div>
+            <div class="sub">{ourRow.w}W · {ourRow.l}L · after R{ladder!.afterRound}</div>
+          </div>
+        ) : (
+          <div class="meta-card">
+            <div class="label">Ladder</div>
+            <div class="value small">No formal ladder</div>
+            <div class="sub">Modified-rules grade</div>
+          </div>
+        )}
+      </div>
+
+      <div class="staff-block">
+        <h2>Coaching staff &amp; leadership</h2>
+        <div class="staff-grid">
+          <div class="staff-card">
+            <div class="staff-role">Coach</div>
+            <div class="staff-name">{grade.coach}</div>
+          </div>
+          {grade.assistants && grade.assistants.length > 0 && (
+            <div class="staff-card">
+              <div class="staff-role">Assistants</div>
+              <div class="staff-name">{grade.assistants.join(' · ')}</div>
+            </div>
+          )}
+          {grade.teamManager && (
+            <div class="staff-card">
+              <div class="staff-role">Team Manager</div>
+              <div class="staff-name">{grade.teamManager}</div>
+            </div>
+          )}
+          {grade.captains && grade.captains.length > 0 && (
+            <div class="staff-card">
+              <div class="staff-role">{grade.captains.length > 1 ? 'Captains' : 'Captain'}</div>
+              <div class="staff-name">{grade.captains.join(' · ')}</div>
+            </div>
+          )}
+          {grade.viceCaptains && grade.viceCaptains.length > 0 && (
+            <div class="staff-card">
+              <div class="staff-role">{grade.viceCaptains.length > 1 ? 'Vice-Captains' : 'Vice-Captain'}</div>
+              <div class="staff-name">{grade.viceCaptains.join(' · ')}</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {ladder && (
+        <div class="ladder-block">
+          <h2>{ladder.grade} Ladder · After R{ladder.afterRound}</h2>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">L</th><th class="num">{ladder.columns === 'pts' ? 'PTS' : '%'}</th></tr>
+            </thead>
+            <tbody>
+              {ladder.rows.map(r => (
+                <tr class={r.highlight ? 'highlight' : ''}>
+                  <td class="pos">{r.pos}</td>
+                  <td class="team"><span class="crest"><Crest club={r.slug} size={26} /></span>{r.team}</td>
+                  <td class="num">{r.p}</td>
+                  <td class="num">{r.w}</td>
+                  <td class="num">{r.l}</td>
+                  <td class="num">{ladder.columns === 'pts' ? (r.pts ?? '—') : r.pct}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div class="fixture-block">
+        <h2>{grade.shortName} 2026 fixture</h2>
+        <p class="lede">Every Saturday at <strong>{grade.bounceTime}</strong>. Approximate game duration {grade.duration}. All bounce times confirmed Monday of each week.</p>
+        <div class="fixture-grid">
+          {fixtures.map(f => (
+            <div class={`fx-card${f.status === 'now' ? ' fx-now' : ''}${f.status === 'past' ? ' fx-past' : ''}${f.type === 'bye' ? ' fx-bye' : ''}`}>
+              <div class="fx-rnd">{f.status === 'now' ? `R${f.round} · NOW` : `R${f.round}`}</div>
+              <div class="fx-date">{f.date}</div>
+              {f.type === 'bye' ? (
+                <div class="fx-bye-mark">BYE</div>
+              ) : (
+                <>
+                  <div class="fx-opp-row">
+                    <span class="fx-vs">vs</span>
+                    {f.oppSlug && <span class="fx-opp-crest"><Crest club={f.oppSlug} size={22} /></span>}
+                    <span class="fx-opp-name">{f.oppName}</span>
+                  </div>
+                  <div class={`fx-venue ${f.venue === 'HOME' ? 'fx-home' : 'fx-away'}`}>{f.venueDetail ?? f.venue}</div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="all-grades">
+        <h3>Other grades</h3>
+        <ul>
+          {GRADES.filter(g => g.slug !== grade.slug).map(g => (
+            <li><a href={`/teams/${g.slug}/`}>{g.displayName}</a><span class="time">{g.bounceTime}</span></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .grade-page { background: var(--cream); padding: 64px 32px 120px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 56px; }
+  .meta-card { background: var(--white); padding: 28px 24px; border-radius: 6px; border-top: 3px solid var(--red); }
+  .meta-card.highlight { background: linear-gradient(135deg, var(--blue-darkest) 0%, var(--blue-deep) 100%); color: var(--white); border-top-color: var(--red); }
+  .meta-card .label { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-bottom: 12px; }
+  .meta-card .value { font-family: var(--display); font-size: 32px; color: var(--blue-deep); line-height: 1; letter-spacing: 0.02em; }
+  .meta-card.highlight .value { color: var(--white); }
+  .meta-card .value.small { font-size: 17px; line-height: 1.3; }
+  .meta-card .rank-suffix { font-size: 18px; vertical-align: baseline; margin-left: 2px; }
+  .meta-card .sub { font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--grey); margin-top: 10px; }
+  .meta-card.highlight .sub { color: rgba(255,255,255,0.7); }
+
+  .staff-block { background: var(--white); padding: 40px 36px; border-radius: 6px; border-left: 4px solid var(--red); margin-bottom: 56px; }
+  .staff-block h2 { font-family: var(--display); font-size: 28px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 24px; }
+  .staff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .staff-card { background: var(--cream); padding: 16px 20px; border-radius: 4px; border-left: 3px solid var(--red); }
+  .staff-role { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+  .staff-name { font-family: var(--display); font-size: 17px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.2; }
+
+  .ladder-block { background: var(--white); border-radius: 6px; border: 1px solid var(--line); overflow: hidden; margin-bottom: 56px; }
+  .ladder-block h2 { background: var(--blue-deep); color: var(--white); font-family: var(--display); font-size: 22px; padding: 20px 28px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 4px solid var(--red); }
+  .ladder-block table { width: 100%; border-collapse: collapse; }
+  .ladder-block th { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); padding: 12px 16px; background: var(--cream); text-align: left; }
+  .ladder-block th.num { text-align: right; }
+  .ladder-block td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--line); }
+  .ladder-block td.num { text-align: right; font-family: var(--display); font-size: 15px; color: var(--blue-deep); }
+  .ladder-block td.pos { font-family: var(--display); font-size: 15px; color: var(--grey); width: 40px; }
+  .ladder-block td.team { display: flex; align-items: center; gap: 12px; font-family: var(--display); font-size: 15px; color: var(--blue-deep); text-transform: uppercase; }
+  .crest { width: 26px; height: 26px; }
+  tr.highlight { background: linear-gradient(90deg, rgba(200,16,46,0.08), rgba(200,16,46,0.02)); }
+  tr.highlight td.team { color: var(--red); }
+  tr.highlight td.pos { color: var(--red); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+
+  .fixture-block { background: var(--white); padding: 40px 36px; border-radius: 6px; margin-bottom: 56px; border-left: 4px solid var(--red); }
+  .fixture-block h2 { font-family: var(--display); font-size: 28px; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.02em; }
+  .lede { font-family: var(--serif); font-size: 17px; color: var(--charcoal); line-height: 1.55; margin-bottom: 28px; }
+  .fixture-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .fx-card { background: var(--cream); border: 1px solid var(--line); border-left: 3px solid var(--blue-deep); border-radius: 4px; padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .fx-card.fx-now { background: linear-gradient(135deg, var(--blue-darkest) 0%, var(--blue-deep) 100%); color: var(--white); border-left-color: var(--red); border-color: var(--red); }
+  .fx-card.fx-past { background: rgba(20,49,92,0.03); position: relative; }
+  .fx-card.fx-past .fx-opp-crest { opacity: 0.45; }
+  .fx-card.fx-past::after {
+    content: 'PLAYED'; position: absolute; top: 6px; right: 8px;
+    font-family: var(--headline); font-size: 9px; letter-spacing: 0.14em; color: var(--grey);
+  }
+  .fx-card.fx-bye { background: rgba(20,49,92,0.05); border-style: dashed; align-items: center; justify-content: center; text-align: center; }
+  .fx-rnd { font-family: var(--display); font-size: 14px; color: var(--red-deep); text-transform: uppercase; letter-spacing: 0.04em; }
+  .fx-card.fx-now .fx-rnd { color: var(--white); }
+  .fx-date { font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; color: var(--grey); text-transform: uppercase; }
+  .fx-card.fx-now .fx-date { color: rgba(255,255,255,0.7); }
+  .fx-opp-row { display: flex; align-items: center; gap: 6px; }
+  .fx-vs { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--grey); }
+  .fx-opp-name { font-family: var(--display); font-size: 14px; text-transform: uppercase; }
+  .fx-venue { font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .fx-home { color: var(--red); font-weight: 600; }
+  .fx-away { color: var(--grey); }
+  .fx-card.fx-now .fx-away { color: rgba(255,255,255,0.7); }
+  .fx-bye-mark { font-family: var(--display); font-size: 22px; color: var(--grey); }
+
+  .all-grades h3 { font-family: var(--display); font-size: 18px; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 16px; letter-spacing: 0.04em; }
+  .all-grades ul { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .all-grades li { background: var(--white); padding: 14px 18px; border-radius: 4px; border-left: 3px solid var(--red); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .all-grades li a { font-family: var(--display); font-size: 15px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; text-decoration: none; }
+  .all-grades li a:hover { color: var(--red); }
+  .all-grades li .time { font-family: var(--headline); font-size: 12px; color: var(--grey); letter-spacing: 0.12em; }
+
+  @media (max-width: 1100px) { .meta-grid { grid-template-columns: repeat(2, 1fr); } .fixture-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { .meta-grid { grid-template-columns: 1fr 1fr; } .fixture-grid { grid-template-columns: repeat(2, 1fr); } .grade-page { padding: 48px 24px; } .ladder-block th, .ladder-block td { padding: 10px 12px; font-size: 13px; } }
+</style>

@@ -1,0 +1,497 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+import { ADMIN_PAGES } from '../../lib/admin-pages';
+
+const db = getAdminClient();
+
+// Load all profiles
+const { data: profiles } = await db
+  .from('profiles')
+  .select('id, full_name, email, phone, role, title, created_at')
+  .order('role')
+  .order('full_name');
+
+// Load all permissions in one query
+const { data: allPerms } = await db
+  .from('admin_permissions')
+  .select('user_id, page, can_view, can_edit');
+
+// Group permissions by user_id
+const permsByUser = new Map<string, Map<string, { can_view: boolean; can_edit: boolean }>>();
+for (const p of allPerms ?? []) {
+  if (!permsByUser.has(p.user_id)) permsByUser.set(p.user_id, new Map());
+  permsByUser.get(p.user_id)!.set(p.page, { can_view: p.can_view, can_edit: p.can_edit });
+}
+
+const isAdmin = Astro.locals.isAdmin ?? false;
+---
+<AdminLayout title="Committee">
+
+  {/* Only admins can manage members */}
+  {!isAdmin && (
+    <div class="access-notice">
+      <p>You can view the committee list. Only administrators can invite members or change permissions.</p>
+    </div>
+  )}
+
+  {isAdmin && (
+    <div class="toolbar">
+      <div class="invite-wrap">
+        <input type="text"  id="invite-name"  placeholder="Full name"          class="invite-input" />
+        <input type="text"  id="invite-title" placeholder="Position (e.g. Secretary)" class="invite-input" />
+        <input type="email" id="invite-email" placeholder="email@example.com"  class="invite-input" />
+        <button class="btn-primary" id="invite-btn">Send Invite</button>
+      </div>
+      <span class="count">{(profiles ?? []).length} members</span>
+    </div>
+    <p class="invite-note">An invitation email is sent. The member signs in with that address to access the portal.</p>
+  )}
+
+  <div class="members-list">
+    {(profiles ?? []).map((p: any) => {
+      const perms = permsByUser.get(p.id) ?? new Map();
+      return (
+        <div class="member-card" data-id={p.id}>
+
+          {/* Card header */}
+          <div class="card-header">
+            <div class="member-avatar" style={p.role === 'admin' ? 'background:#C8102E22;color:#C8102E' : ''}>
+              {p.full_name?.charAt(0)?.toUpperCase() ?? '?'}
+            </div>
+            <div class="member-info">
+              <div class="member-name">{p.full_name}</div>
+              {p.title && <div class="member-pos">{p.title}</div>}
+              <div class="member-email">{p.email}</div>
+              {p.phone && <div class="member-phone">{p.phone}</div>}
+            </div>
+            <div class="card-meta">
+              {p.role === 'admin'
+                ? <span class="badge badge-admin">Admin — Full Access</span>
+                : <span class="badge badge-committee">Committee</span>
+              }
+              <div class="member-joined">Joined {new Date(p.created_at).toLocaleDateString('en-AU', { month:'short', year:'numeric' })}</div>
+            </div>
+            {isAdmin && (
+              <div class="card-actions">
+                <button class="btn-sm btn-edit"
+                  data-id={p.id}
+                  data-name={p.full_name}
+                  data-title={p.title ?? ''}
+                  data-phone={p.phone ?? ''}>
+                  Edit
+                </button>
+                {p.role !== 'admin' && (
+                  <button class="btn-sm btn-toggle-perms" data-id={p.id}>
+                    Permissions ▾
+                  </button>
+                )}
+                <button class="btn-sm btn-danger btn-remove" data-id={p.id} data-name={p.full_name}>
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Permissions grid — hidden by default, toggle on button click */}
+          {isAdmin && p.role !== 'admin' && (
+            <div class="perms-panel" id={`perms-${p.id}`} style="display:none">
+              <div class="perms-header">
+                <span class="perms-title">Page Access</span>
+                <div class="perms-bulk">
+                  <button class="btn-tiny btn-grant-all" data-userid={p.id}>Grant all</button>
+                  <button class="btn-tiny btn-revoke-all" data-userid={p.id}>Revoke all</button>
+                </div>
+              </div>
+              <div class="perms-grid">
+                <div class="perms-col-header" style="grid-column:1">Page</div>
+                <div class="perms-col-header center">View</div>
+                <div class="perms-col-header center">Edit</div>
+                {ADMIN_PAGES.map(pg => {
+                  const perm = perms.get(pg.key);
+                  return (
+                    <>
+                      <div class="perms-page-name">
+                        <span class="perms-page-icon">{pg.icon}</span>
+                        {pg.label}
+                      </div>
+                      <div class="center">
+                        <input
+                          type="checkbox"
+                          class="perm-check view-check"
+                          data-userid={p.id}
+                          data-page={pg.key}
+                          data-type="view"
+                          checked={perm?.can_view === true}
+                        />
+                      </div>
+                      <div class="center">
+                        <input
+                          type="checkbox"
+                          class="perm-check edit-check"
+                          data-userid={p.id}
+                          data-page={pg.key}
+                          data-type="edit"
+                          checked={perm?.can_edit === true}
+                          disabled={perm?.can_view !== true}
+                        />
+                      </div>
+                    </>
+                  );
+                })}
+              </div>
+              <div class="perms-footer">
+                <span class="save-status" id={`save-status-${p.id}`}></span>
+                <button class="btn-primary btn-save-perms" data-userid={p.id}>Save permissions</button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    })}
+  </div>
+
+  {(profiles ?? []).length === 0 && (
+    <div class="empty-state">
+      <div class="empty-icon">👤</div>
+      <p>No members yet. Invite the first committee member using the form above.</p>
+    </div>
+  )}
+
+  {/* Edit member modal */}
+  <dialog id="edit-modal" class="modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>Edit Member</h2>
+        <button class="modal-close" id="edit-close">✕</button>
+      </div>
+      <form id="edit-form" class="modal-form">
+        <input type="hidden" id="edit-id" />
+        <label class="form-group">
+          Full Name <span class="req">*</span>
+          <input type="text" id="edit-name" required />
+        </label>
+        <label class="form-group">
+          Position Title
+          <input type="text" id="edit-title" placeholder="e.g. Secretary" />
+        </label>
+        <label class="form-group">
+          Phone
+          <input type="tel" id="edit-phone" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="edit-cancel">Cancel</button>
+          <button type="submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+</AdminLayout>
+
+<style>
+  .access-notice { background: rgba(255,255,255,0.04); border: 1px solid var(--admin-border); border-radius:8px; padding:16px 20px; font-size:14px; color:var(--admin-muted); margin-bottom:24px; }
+
+  .toolbar { display:flex; align-items:center; gap:16px; margin-bottom:8px; flex-wrap:wrap; }
+  .invite-wrap { display:flex; gap:10px; flex:1; flex-wrap:wrap; }
+  .invite-input { flex:1; min-width:160px; background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:9px 14px; font-size:14px; }
+  .invite-input:focus { outline:none; border-color:#C8102E; }
+  .count { font-size:14px; color:var(--admin-muted); white-space:nowrap; }
+  .invite-note { font-size:12px; color:var(--admin-muted); margin-bottom:24px; }
+  .btn-primary { background:#C8102E; color:#fff; border:none; border-radius:6px; padding:9px 18px; font-size:14px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .btn-primary:hover { background:#a50d24; }
+  .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+
+  /* Member cards */
+  .members-list { display:flex; flex-direction:column; gap:12px; }
+  .member-card { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:10px; overflow:hidden; }
+  .card-header { display:flex; align-items:flex-start; gap:14px; padding:18px; }
+  .member-avatar {
+    width:48px; height:48px; border-radius:50%;
+    background:rgba(255,255,255,0.06);
+    color:rgba(255,255,255,0.7);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; font-weight:700; flex-shrink:0;
+  }
+  .member-info { flex:1; min-width:0; }
+  .member-name  { font-size:15px; font-weight:600; }
+  .member-pos   { font-size:12px; color:#8ab4f8; margin-top:2px; }
+  .member-email { font-size:13px; color:var(--admin-muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .member-phone { font-size:13px; color:var(--admin-muted); }
+  .card-meta    { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  .member-joined { font-size:11px; color:var(--admin-muted); }
+  .badge { font-size:11px; letter-spacing:0.08em; text-transform:uppercase; padding:3px 8px; border-radius:3px; }
+  .badge-admin     { background:rgba(200,16,46,0.2); color:#C8102E; }
+  .badge-committee { background:rgba(138,180,248,0.15); color:#8ab4f8; }
+
+  .card-actions { display:flex; flex-direction:column; gap:5px; flex-shrink:0; margin-left:8px; }
+  .btn-sm { border-radius:5px; padding:5px 12px; font-size:12px; cursor:pointer; border:1px solid var(--admin-border); background:transparent; color:var(--admin-muted); white-space:nowrap; transition:all 0.15s; }
+  .btn-sm:hover { border-color:var(--admin-text); color:var(--admin-text); }
+  .btn-danger:hover { border-color:#f87171; color:#f87171; }
+
+  /* Permissions panel */
+  .perms-panel { border-top:1px solid var(--admin-border); padding:20px 20px 16px; }
+  .perms-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .perms-title { font-size:12px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--admin-muted); }
+  .perms-bulk { display:flex; gap:8px; }
+  .btn-tiny { font-size:11px; padding:3px 10px; border:1px solid var(--admin-border); border-radius:4px; background:transparent; color:var(--admin-muted); cursor:pointer; }
+  .btn-tiny:hover { color:var(--admin-text); border-color:rgba(255,255,255,0.25); }
+
+  .perms-grid {
+    display:grid;
+    grid-template-columns: 1fr 60px 60px;
+    gap:0;
+    border:1px solid var(--admin-border);
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .perms-col-header {
+    background:rgba(255,255,255,0.04);
+    padding:8px 14px;
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--admin-muted);
+    border-bottom:1px solid var(--admin-border);
+  }
+  .perms-col-header.center { text-align:center; }
+  .perms-page-name {
+    padding:10px 14px;
+    font-size:14px;
+    color:var(--admin-text);
+    border-bottom:1px solid var(--admin-border);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .perms-grid > div:nth-last-child(-n+3) { border-bottom:none; }
+  .perms-page-name:last-of-type { border-bottom:none; }
+  .perms-page-icon { font-size:14px; }
+  .center {
+    display:flex; align-items:center; justify-content:center;
+    border-bottom:1px solid var(--admin-border);
+  }
+  .perm-check {
+    width:16px; height:16px; cursor:pointer;
+    accent-color:#C8102E;
+  }
+  .perm-check:disabled { opacity:0.3; cursor:not-allowed; }
+
+  .perms-footer { display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:14px; }
+  .save-status { font-size:13px; color:#4ade80; }
+  .save-status.error { color:#f87171; }
+
+  .empty-state { text-align:center; padding:64px; color:var(--admin-muted); }
+  .empty-icon  { font-size:48px; margin-bottom:12px; }
+
+  /* Modal */
+  .modal { background:transparent; border:none; padding:0; }
+  .modal::backdrop { background:rgba(0,0,0,0.6); }
+  .modal-inner { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:12px; padding:28px; width:440px; max-width:95vw; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .modal-header h2 { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:0.05em; }
+  .modal-close { background:transparent; border:none; color:var(--admin-muted); font-size:18px; cursor:pointer; }
+  .modal-form { display:flex; flex-direction:column; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--admin-muted); }
+  .form-group input { background:#081426; border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:8px 12px; font-size:14px; }
+  .form-group input:focus { outline:none; border-color:#C8102E; }
+  .req { color:#C8102E; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+  .btn-ghost { background:transparent; border:1px solid var(--admin-border); color:var(--admin-muted); border-radius:6px; padding:8px 16px; font-size:14px; cursor:pointer; }
+  .btn-ghost:hover { color:var(--admin-text); }
+</style>
+
+<script>
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
+
+  // ── Toggle permissions panel ─────────────────────────────────
+  document.querySelectorAll('.btn-toggle-perms').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.id!;
+      const panel = document.getElementById(`perms-${id}`);
+      if (!panel) return;
+      const open = panel.style.display !== 'none';
+      panel.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? 'Permissions ▾' : 'Permissions ▴';
+    });
+  });
+
+  // ── View / Edit checkbox logic ───────────────────────────────
+  // Checking Edit auto-checks View; unchecking View auto-unchecks Edit
+  document.querySelectorAll('.perm-check').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const el   = e.target as HTMLInputElement;
+      const row  = el.dataset;
+      const page = row.page!;
+      const uid  = row.userid!;
+      const type = row.type!;
+
+      const viewEl = document.querySelector<HTMLInputElement>(
+        `.view-check[data-userid="${uid}"][data-page="${page}"]`
+      );
+      const editEl = document.querySelector<HTMLInputElement>(
+        `.edit-check[data-userid="${uid}"][data-page="${page}"]`
+      );
+      if (!viewEl || !editEl) return;
+
+      if (type === 'edit' && el.checked) {
+        viewEl.checked  = true;       // edit implies view
+        editEl.disabled = false;
+      }
+      if (type === 'view' && !el.checked) {
+        editEl.checked  = false;      // revoking view revokes edit
+        editEl.disabled = true;
+      }
+      if (type === 'view' && el.checked) {
+        editEl.disabled = false;
+      }
+    });
+  });
+
+  // ── Grant / Revoke all ───────────────────────────────────────
+  document.querySelectorAll('.btn-grant-all').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid = (btn as HTMLElement).dataset.userid!;
+      document.querySelectorAll<HTMLInputElement>(`.perm-check[data-userid="${uid}"]`).forEach(cb => {
+        cb.checked  = true;
+        cb.disabled = false;
+      });
+    });
+  });
+  document.querySelectorAll('.btn-revoke-all').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid = (btn as HTMLElement).dataset.userid!;
+      document.querySelectorAll<HTMLInputElement>(`.perm-check[data-userid="${uid}"]`).forEach(cb => {
+        cb.checked = false;
+        if (cb.dataset.type === 'edit') cb.disabled = true;
+      });
+    });
+  });
+
+  // ── Save permissions ─────────────────────────────────────────
+  document.querySelectorAll('.btn-save-perms').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const userId = (btn as HTMLElement).dataset.userid!;
+      const statusEl = document.getElementById(`save-status-${userId}`);
+      btn.setAttribute('disabled', 'true');
+      if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.className = 'save-status'; }
+
+      // Collect all page permissions for this user
+      const pages = new Set<string>();
+      document.querySelectorAll<HTMLInputElement>(`.perm-check[data-userid="${userId}"]`).forEach(cb => {
+        pages.add(cb.dataset.page!);
+      });
+
+      const permissions = Array.from(pages).map(page => {
+        const viewEl = document.querySelector<HTMLInputElement>(`.view-check[data-userid="${userId}"][data-page="${page}"]`);
+        const editEl = document.querySelector<HTMLInputElement>(`.edit-check[data-userid="${userId}"][data-page="${page}"]`);
+        return {
+          page,
+          can_view: viewEl?.checked ?? false,
+          can_edit: editEl?.checked ?? false,
+        };
+      });
+
+      try {
+        const res = await fetch('/api/admin/permissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, permissions }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'Failed');
+        if (statusEl) { statusEl.textContent = '✓ Saved'; statusEl.className = 'save-status'; }
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+      } catch (err: any) {
+        if (statusEl) { statusEl.textContent = '✗ ' + err.message; statusEl.className = 'save-status error'; }
+      } finally {
+        btn.removeAttribute('disabled');
+      }
+    });
+  });
+
+  // ── Invite member ────────────────────────────────────────────
+  document.getElementById('invite-btn')?.addEventListener('click', async () => {
+    const nameEl  = document.getElementById('invite-name')  as HTMLInputElement;
+    const titleEl = document.getElementById('invite-title') as HTMLInputElement;
+    const emailEl = document.getElementById('invite-email') as HTMLInputElement;
+    const btn     = document.getElementById('invite-btn')!;
+
+    const name  = nameEl.value.trim();
+    const email = emailEl.value.trim();
+    if (!name || !email) { alert('Name and email are required'); return; }
+
+    btn.textContent = 'Inviting…';
+    (btn as HTMLButtonElement).disabled = true;
+
+    try {
+      const res = await fetch('/api/admin/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name, title: titleEl.value.trim(), role: 'committee' }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Failed');
+      alert(`Invitation sent to ${email}`);
+      nameEl.value = ''; titleEl.value = ''; emailEl.value = '';
+      window.location.reload();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      btn.textContent = 'Send Invite';
+      (btn as HTMLButtonElement).disabled = false;
+    }
+  });
+
+  // ── Edit member ──────────────────────────────────────────────
+  const editModal = document.getElementById('edit-modal') as HTMLDialogElement;
+  document.getElementById('edit-close')?.addEventListener('click',  () => editModal?.close());
+  document.getElementById('edit-cancel')?.addEventListener('click', () => editModal?.close());
+
+  document.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const el = btn as HTMLElement;
+      (document.getElementById('edit-id')    as HTMLInputElement).value = el.dataset.id!;
+      (document.getElementById('edit-name')  as HTMLInputElement).value = el.dataset.name  ?? '';
+      (document.getElementById('edit-title') as HTMLInputElement).value = el.dataset.title ?? '';
+      (document.getElementById('edit-phone') as HTMLInputElement).value = el.dataset.phone ?? '';
+      editModal?.showModal();
+    });
+  });
+
+  document.getElementById('edit-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id    = (document.getElementById('edit-id')    as HTMLInputElement).value;
+    const name  = (document.getElementById('edit-name')  as HTMLInputElement).value;
+    const title = (document.getElementById('edit-title') as HTMLInputElement).value;
+    const phone = (document.getElementById('edit-phone') as HTMLInputElement).value;
+    const { error } = await supabase.from('profiles').update({
+      full_name: name,
+      title:     title || null,
+      phone:     phone || null,
+    }).eq('id', id);
+    if (error) { alert('Error: ' + error.message); return; }
+    editModal?.close();
+    window.location.reload();
+  });
+
+  // ── Remove member ────────────────────────────────────────────
+  document.querySelectorAll('.btn-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const el = btn as HTMLElement;
+      if (!confirm(`Remove ${el.dataset.name} from the portal? This cannot be undone.`)) return;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: 'volunteer' })
+        .eq('id', el.dataset.id!);
+      if (error) { alert('Error: ' + error.message); return; }
+      window.location.reload();
+    });
+  });
+</script>

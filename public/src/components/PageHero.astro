@@ -1,0 +1,123 @@
+---
+/**
+ * Compact hero block for the top of dedicated pages.
+ * Reuses the homepage hero's visual language (dark blue + red slash + bulldog watermark)
+ * but at ~40vh instead of full-bleed.
+ */
+import Crest from './Crest.astro';
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  /** Optional italicised continuation of the title (in serif, red). */
+  titleItalic?: string;
+  intro?: string;
+  /** Show the large bulldog watermark in the background. */
+  showCrest?: boolean;
+}
+
+const { eyebrow, title, titleItalic, intro, showCrest = true } = Astro.props;
+---
+<section class="page-hero">
+  <div class="bg-base" aria-hidden="true"></div>
+  <div class="bg-slash" aria-hidden="true"></div>
+  {showCrest && (
+    <div class="bg-watermark" aria-hidden="true">
+      <Crest
+        club="wallaroo"
+        size={560}
+        widths={[380, 560, 780]}
+        sizes="560px"
+        loading="eager"
+        altOverride=""
+      />
+    </div>
+  )}
+  <div class="inner">
+    <div class="eyebrow">{eyebrow}</div>
+    <h1 class="title">
+      {title}
+      {titleItalic && <span class="ital">{titleItalic}</span>}
+    </h1>
+    {intro && <p class="intro">{intro}</p>}
+  </div>
+</section>
+
+<style>
+  .page-hero {
+    position: relative;
+    background: var(--blue-darkest);
+    color: var(--white);
+    overflow: hidden;
+    border-bottom: 6px solid var(--red);
+    padding: 64px 32px 80px;
+  }
+  .bg-base {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 75% 30%, rgba(200,16,46,0.3) 0%, transparent 50%),
+      radial-gradient(ellipse at 20% 80%, rgba(20,49,92,0.6) 0%, transparent 60%),
+      linear-gradient(180deg, var(--blue-darkest) 0%, var(--blue-deep) 100%);
+  }
+  .bg-slash {
+    position: absolute; top: -10%; right: -20%;
+    width: 80%; height: 140%;
+    background: linear-gradient(115deg, transparent 40%, rgba(200,16,46,0.15) 50%, transparent 60%);
+    pointer-events: none;
+  }
+  .bg-watermark {
+    position: absolute;
+    right: -4%; top: 50%; transform: translateY(-50%);
+    width: 560px; height: 560px;
+    opacity: 0.10;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .bg-watermark :global(img) {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  .inner {
+    position: relative; z-index: 5;
+    max-width: 1400px; margin: 0 auto;
+  }
+  .eyebrow {
+    font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .title {
+    font-family: var(--display);
+    font-size: clamp(48px, 8vw, 112px);
+    line-height: 0.92;
+    text-transform: uppercase;
+    letter-spacing: -0.005em;
+    margin-bottom: 24px;
+    font-weight: 400;
+  }
+  .title .ital {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--red);
+    text-transform: none;
+    letter-spacing: -0.02em;
+    display: block;
+  }
+  .intro {
+    font-family: var(--serif);
+    font-size: clamp(17px, 1.4vw, 21px);
+    line-height: 1.55;
+    color: rgba(255,255,255,0.8);
+    max-width: 720px;
+    border-left: 3px solid var(--red);
+    padding-left: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .bg-watermark { width: 380px; height: 380px; right: -10%; }
+  }
+  @media (max-width: 700px) {
+    .page-hero { padding: 48px 24px 64px; }
+    .bg-watermark { width: 260px; height: 260px; right: -8%; opacity: 0.07; }
+  }
+</style>

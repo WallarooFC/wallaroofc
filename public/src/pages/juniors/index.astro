@@ -1,0 +1,115 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import JuniorPathway from '../../components/JuniorPathway.astro';
+---
+<PageLayout
+  title="Juniors & Auskick · Wallaroo FC"
+  description="Auskick, U9, U11, Junior Colts and Senior Colts at Wallaroo FC. Five & up. Saturday mornings on the Wallaroo Oval grass."
+>
+  <PageHero
+    eyebrow="The Bulldogs Pathway"
+    title="Five & up,"
+    titleItalic="forever red, white & blue."
+    intro="From a five-year-old's first kick on the Wallaroo Oval grass to running out for the A-Grade. Every stage. Every Saturday. Every winter."
+  />
+
+  <JuniorPathway />
+
+  <section class="auskick">
+    <div class="container">
+      <div class="grid">
+        <div class="text">
+          <div class="eyebrow">Auskick · Ages 5–7</div>
+          <h2>Saturday mornings.<span class="ital">No scores, all fun.</span></h2>
+          <p>Auskick is the start of every Bulldog's footy life. Saturday mornings on the main oval, running through fundamentals — bouncing, marking, kicking, running and laughing.</p>
+          <p>No score is kept. Every kid gets the ball. Every kid gets a high five. It's organised by AFL Auskick and run by our junior coaches with parent volunteers.</p>
+        </div>
+        <div class="info-card">
+          <h3>What you need to know</h3>
+          <dl>
+            <dt>When</dt>
+            <dd>Saturdays · 9:00–10:00 AM · April through August</dd>
+            <dt>Where</dt>
+            <dd>Wallaroo Oval main ground, Cornish Terrace</dd>
+            <dt>Cost</dt>
+            <dd>One-off AFL Auskick fee (~$80) includes the kit, footy and insurance</dd>
+            <dt>Kit included</dt>
+            <dd>Auskick footy, t-shirt, water bottle, drawstring bag</dd>
+            <dt>Register</dt>
+            <dd><a href="https://play.afl/auskick" target="_blank" rel="noopener">play.afl/auskick →</a></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="juniors-detail">
+    <div class="container">
+      <div class="eyebrow">Junior Grades · Ages 7–17</div>
+      <h2>From <span class="ital">U9 to U17.</span></h2>
+      <p class="lede">Modified rules at U9 and U11. Full-field structured football from U14. Senior Colts (U17) bridges into B-Grade pre-season for the next year.</p>
+
+      <div class="grade-grid">
+        <div class="grade-card">
+          <h3>U9 — First match-day jumper</h3>
+          <p>9:00 AM bounce. Smaller field. Modified rules. The bridge between Auskick and real footy.</p>
+        </div>
+        <div class="grade-card">
+          <h3>U11 — Full YPFL competition</h3>
+          <p>9:00 AM bounce. Full grades, weekly fixtures, modified rules. First real ladder position.</p>
+        </div>
+        <div class="grade-card">
+          <h3>U14 / Junior Colts</h3>
+          <p>10:00 AM bounce. Full-field football, structured training Wednesday afternoons. Where many lifelong Bulldogs careers begin.</p>
+        </div>
+        <div class="grade-card">
+          <h3>U17 / Senior Colts</h3>
+          <p>11:20 AM bounce. Pre-season runs with the B-Grade. Some debut for A-Grade in their final year. Pathway into senior football.</p>
+        </div>
+      </div>
+
+      <div class="cta-block">
+        <h3>Register for 2026</h3>
+        <p>Junior registrations are via PlayHQ. Includes AFL insurance and your jumper for the season.</p>
+        <div class="ctas">
+          <a class="btn-primary" href="https://www.playhq.com/afl/register/wallaroofc" target="_blank" rel="noopener"><span>Register on PlayHQ</span><span aria-hidden="true">→</span></a>
+          <a class="btn-ghost" href="mailto:admin@wallaroofc.com.au?subject=Junior%20registration%20enquiry"><span>Email a question</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .auskick { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .container { max-width: 1200px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 56px; align-items: start; }
+  .eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  h2 { font-family: var(--display); font-size: clamp(36px, 5vw, 72px); color: var(--blue-deep); text-transform: uppercase; line-height: 0.95; margin-bottom: 24px; }
+  h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; display: block; }
+  .text p { font-family: var(--serif); font-size: 18px; line-height: 1.65; color: var(--charcoal); margin-bottom: 18px; }
+  .info-card { background: var(--cream); padding: 36px 32px; border-radius: 6px; border-left: 4px solid var(--red); }
+  .info-card h3 { font-family: var(--display); font-size: 22px; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 20px; }
+  dl dt { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-top: 12px; }
+  dl dd { font-family: var(--serif); font-size: 16px; color: var(--charcoal); margin-bottom: 8px; line-height: 1.5; }
+  dl dd a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
+
+  .juniors-detail { background: var(--cream); padding: 100px 32px; }
+  .lede { font-family: var(--serif); font-size: 19px; line-height: 1.6; color: var(--charcoal); margin-bottom: 48px; max-width: 720px; }
+  .grade-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 56px; }
+  .grade-card { background: var(--white); padding: 28px 28px; border-radius: 6px; border-left: 3px solid var(--red); }
+  .grade-card h3 { font-family: var(--display); font-size: 20px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 10px; }
+  .grade-card p { font-family: var(--body); font-size: 15px; line-height: 1.55; color: var(--charcoal); }
+  .cta-block { background: var(--blue-darkest); color: var(--white); padding: 48px 40px; border-radius: 6px; border-top: 4px solid var(--red); display: flex; flex-direction: column; gap: 16px; }
+  .cta-block h3 { font-family: var(--display); font-size: 28px; text-transform: uppercase; }
+  .cta-block p { font-family: var(--serif); font-size: 17px; color: rgba(255,255,255,0.85); }
+  .ctas { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+  .btn-primary { background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--red); display: inline-flex; align-items: center; gap: 12px; transition: all 0.3s; }
+  .btn-primary:hover { background: var(--red-deep); transform: translateY(-2px); }
+  .btn-ghost { background: transparent; color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid rgba(255,255,255,0.4); transition: all 0.3s; }
+  .btn-ghost:hover { border-color: var(--white); background: rgba(255,255,255,0.05); }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; gap: 32px; } .grade-grid { grid-template-columns: 1fr; } .auskick, .juniors-detail { padding: 64px 24px; } }
+</style>

@@ -1,0 +1,70 @@
+grade: Junior Colts
+tabLabel: Jnr Colts
+order: 4
+afterRound: 5
+columns: pts
+rows:
+  - pos: 1
+    slug: moonta
+    team: Moonta
+    p: 4
+    w: 4
+    l: 0
+    pts: 8
+  - pos: 2
+    slug: central-yorke
+    team: Cent. Yorke
+    p: 4
+    w: 4
+    l: 0
+    pts: 8
+  - pos: 3
+    slug: ardrossan
+    team: Ardrossan
+    p: 4
+    w: 3
+    l: 1
+    pts: 6
+  - pos: 4
+    slug: cms
+    team: CMS Crows
+    p: 5
+    w: 3
+    l: 2
+    pts: 6
+  - pos: 5
+    slug: bute
+    team: Bute
+    p: 5
+    w: 2
+    l: 3
+    pts: 4
+  - pos: 6
+    slug: southern-eagles
+    team: Sthn Eagles
+    p: 5
+    w: 2
+    l: 3
+    pts: 4
+  - pos: 7
+    slug: wallaroo
+    team: Wallaroo
+    p: 4
+    w: 1
+    l: 3
+    pts: 2
+    highlight: true
+  - pos: 8
+    slug: kadina
+    team: Kadina
+    p: 4
+    w: 1
+    l: 3
+    pts: 2
+  - pos: 9
+    slug: paskeville
+    team: Paskeville
+    p: 5
+    w: 0
+    l: 5
+    pts: 0

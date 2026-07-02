@@ -1,0 +1,281 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+const seasonFilter = parseInt(Astro.url.searchParams.get('season') ?? '2026');
+const gradeFilter  = Astro.url.searchParams.get('grade') ?? 'all';
+const statusFilter = Astro.url.searchParams.get('status') ?? 'all';
+
+let query = db.from('fixtures').select('*').eq('season', seasonFilter).order('match_date').order('grade');
+if (gradeFilter !== 'all')  query = query.eq('grade', gradeFilter);
+if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+
+const { data: fixtures } = await query;
+
+const grades = ['A-Grade','B Grade','Senior Colts','Junior Colts','U11','U9'];
+const totalCount = fixtures?.length ?? 0;
+
+function formatDate(d?: string | null) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' });
+}
+---
+<AdminLayout title="Fixtures">
+  <div class="toolbar">
+    <form method="get" class="filters">
+      <select name="grade" class="select" onchange="this.form.submit()">
+        <option value="all">All Grades</option>
+        {grades.map(g => <option value={g} selected={gradeFilter === g}>{g}</option>)}
+      </select>
+      <select name="status" class="select" onchange="this.form.submit()">
+        <option value="all">All Status</option>
+        <option value="upcoming" selected={statusFilter==='upcoming'}>Upcoming</option>
+        <option value="completed" selected={statusFilter==='completed'}>Completed</option>
+        <option value="bye" selected={statusFilter==='bye'}>Byes</option>
+        <option value="postponed" selected={statusFilter==='postponed'}>Postponed</option>
+      </select>
+      <input type="hidden" name="season" value={seasonFilter} />
+      <button type="submit" class="btn-filter">Filter</button>
+    </form>
+    <div class="toolbar-right">
+      <span class="count">{totalCount} fixtures</span>
+      <button class="btn-sync" id="sync-btn">↻ Sync from PlayHQ</button>
+      <button class="btn-primary" id="add-fixture-btn">+ Add Fixture</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rnd</th>
+          <th>Grade</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Home</th>
+          <th>Away</th>
+          <th>Venue</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {(fixtures ?? []).length === 0 && (
+          <tr><td colspan="9" class="empty">No fixtures found. Sync from PlayHQ to populate.</td></tr>
+        )}
+        {(fixtures ?? []).map((f: any) => (
+          <tr class={f.is_home ? 'home-row' : ''}>
+            <td class="num">{f.round}</td>
+            <td><span class="grade-tag">{f.grade}</span></td>
+            <td class="date">{formatDate(f.match_date)}</td>
+            <td class="muted">{f.match_time?.substring(0,5) ?? '—'}</td>
+            <td class={f.is_home ? 'team-wallaroo' : 'team-opp'}>{f.home_team ?? '—'}</td>
+            <td class={!f.is_home ? 'team-wallaroo' : 'team-opp'}>{f.away_team ?? '—'}</td>
+            <td class="muted venue">{f.venue ?? '—'}</td>
+            <td>
+              <span class={`status-tag status-${f.status}`}>{f.status}</span>
+            </td>
+            <td class="actions-cell">
+              <button class="btn-row" data-fixture-id={f.id} data-action="edit">Edit</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Add/Edit Fixture Modal -->
+  <dialog id="fixture-modal" class="modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="fixture-modal-title">Add Fixture</h2>
+        <button class="modal-close" data-close="fixture-modal">✕</button>
+      </div>
+      <form id="fixture-form" class="modal-form">
+        <input type="hidden" id="fixture-id" name="id" />
+        <div class="form-row">
+          <label class="form-group">
+            Round <span class="req">*</span>
+            <input type="number" name="round" min="1" max="30" required />
+          </label>
+          <label class="form-group">
+            Grade <span class="req">*</span>
+            <select name="grade" required>
+              {grades.map(g => <option value={g}>{g}</option>)}
+            </select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Date
+            <input type="date" name="match_date" />
+          </label>
+          <label class="form-group">
+            Time
+            <input type="time" name="match_time" />
+          </label>
+        </div>
+        <label class="form-group">
+          Venue
+          <input type="text" name="venue" />
+        </label>
+        <div class="form-row">
+          <label class="form-group">
+            Home Team
+            <input type="text" name="home_team" />
+          </label>
+          <label class="form-group">
+            Away Team
+            <input type="text" name="away_team" />
+          </label>
+        </div>
+        <label class="form-group">
+          Status
+          <select name="status">
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+            <option value="bye">Bye</option>
+            <option value="postponed">Postponed</option>
+          </select>
+        </label>
+        <label class="form-group checkbox-single">
+          <input type="checkbox" name="is_home" id="fixture-is-home" /> Wallaroo is home team
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" data-close="fixture-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="fixture-submit">Save Fixture</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+</AdminLayout>
+
+<style>
+  .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; gap:16px; flex-wrap:wrap; }
+  .filters { display:flex; gap:10px; }
+  .select { background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  .btn-filter { background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  .btn-filter:hover { border-color:#C8102E; color:#C8102E; }
+  .toolbar-right { display:flex; align-items:center; gap:12px; }
+  .count { font-size:14px; color:var(--admin-muted); }
+  .btn-sync { background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:9px 16px; font-size:14px; cursor:pointer; }
+  .btn-sync:hover { border-color:#C8102E; color:#C8102E; }
+  .btn-primary { background:#C8102E; color:#fff; border:none; border-radius:6px; padding:9px 18px; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn-primary:hover { background:#a50d24; }
+
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; padding:10px 12px; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--admin-muted); border-bottom:1px solid var(--admin-border); white-space:nowrap; }
+  td { padding:11px 12px; border-bottom:1px solid var(--admin-border); vertical-align:middle; }
+  tr:hover td { background:rgba(255,255,255,0.02); }
+  tr.home-row td:first-child { border-left:2px solid #C8102E; }
+
+  .num { color:var(--admin-muted); font-size:13px; text-align:center; }
+  .date { white-space:nowrap; }
+  .muted { color:var(--admin-muted); font-size:13px; }
+  .venue { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .team-wallaroo { font-weight:600; color:var(--admin-text); }
+  .team-opp { color:var(--admin-muted); }
+  .grade-tag { background:rgba(20,49,92,0.6); color:#8ab4f8; border-radius:4px; padding:3px 8px; font-size:12px; white-space:nowrap; }
+  .status-tag { border-radius:4px; padding:3px 8px; font-size:12px; text-transform:capitalize; white-space:nowrap; }
+  .status-upcoming { background:rgba(139,92,246,0.15); color:#a78bfa; }
+  .status-completed { background:rgba(74,222,128,0.15); color:#4ade80; }
+  .status-bye { background:rgba(255,255,255,0.08); color:var(--admin-muted); }
+  .status-postponed { background:rgba(234,179,8,0.15); color:#facc15; }
+  .actions-cell { text-align:right; }
+  .btn-row { background:transparent; border:1px solid var(--admin-border); color:var(--admin-muted); border-radius:4px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  .btn-row:hover { border-color:#C8102E; color:#C8102E; }
+  .empty { text-align:center; padding:48px; color:var(--admin-muted); }
+
+  .modal { background:transparent; border:none; padding:0; }
+  .modal::backdrop { background:rgba(0,0,0,0.6); }
+  .modal-inner { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:12px; padding:28px; width:500px; max-width:95vw; max-height:90vh; overflow-y:auto; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .modal-header h2 { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:0.05em; }
+  .modal-close { background:transparent; border:none; color:var(--admin-muted); font-size:18px; cursor:pointer; }
+  .modal-form { display:flex; flex-direction:column; gap:14px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--admin-muted); }
+  .form-group input, .form-group select {
+    background:#081426; border:1px solid var(--admin-border); color:var(--admin-text);
+    border-radius:6px; padding:8px 12px; font-size:14px; font-family:inherit;
+  }
+  .form-group input:focus, .form-group select:focus { outline:none; border-color:#C8102E; }
+  .req { color:#C8102E; }
+  .checkbox-single { flex-direction:row !important; align-items:center; gap:8px; font-size:14px; color:var(--admin-text); cursor:pointer; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+  .btn-ghost { background:transparent; border:1px solid var(--admin-border); color:var(--admin-muted); border-radius:6px; padding:8px 16px; font-size:14px; cursor:pointer; }
+  .btn-ghost:hover { color:var(--admin-text); }
+</style>
+
+<script>
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
+
+  function openModal(id: string) { (document.getElementById(id) as HTMLDialogElement)?.showModal(); }
+  function closeModal(id: string) { (document.getElementById(id) as HTMLDialogElement)?.close(); }
+
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeModal((b as HTMLElement).dataset.close!)));
+
+  document.getElementById('add-fixture-btn')?.addEventListener('click', () => {
+    (document.getElementById('fixture-id') as HTMLInputElement).value = '';
+    (document.getElementById('fixture-modal-title') as HTMLElement).textContent = 'Add Fixture';
+    (document.getElementById('fixture-form') as HTMLFormElement).reset();
+    openModal('fixture-modal');
+  });
+
+  document.getElementById('sync-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('sync-btn')!;
+    btn.textContent = '↻ Syncing…';
+    btn.setAttribute('disabled', 'true');
+    const res = await fetch('/api/sync/playhq', {
+      method: 'POST',
+      headers: { 'x-cron-secret': (import.meta as any).env?.PUBLIC_CRON_SECRET ?? '' }
+    });
+    const json = await res.json();
+    btn.textContent = res.ok ? '✓ Synced' : '✗ Error';
+    btn.removeAttribute('disabled');
+    if (!res.ok) console.error(json);
+    else window.location.reload();
+  });
+
+  document.getElementById('fixture-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('fixture-submit')!;
+    btn.textContent = 'Saving…';
+    const fd = new FormData(e.target as HTMLFormElement);
+    const payload: any = {
+      round: parseInt(fd.get('round') as string),
+      grade: fd.get('grade'),
+      match_date: fd.get('match_date') || null,
+      match_time: fd.get('match_time') || null,
+      venue: fd.get('venue') || null,
+      home_team: fd.get('home_team') || null,
+      away_team: fd.get('away_team') || null,
+      status: fd.get('status'),
+      is_home: fd.has('is_home'),
+      season: 2026,
+    };
+    if (payload.is_home) {
+      payload.opponent = payload.away_team;
+    } else {
+      payload.opponent = payload.home_team;
+    }
+    const id = fd.get('id') as string;
+    let err;
+    if (id) {
+      ({ error: err } = await supabase.from('fixtures').update(payload).eq('id', id));
+    } else {
+      ({ error: err } = await supabase.from('fixtures').insert(payload));
+    }
+    if (err) { alert('Error: ' + err.message); btn.textContent = 'Save Fixture'; return; }
+    window.location.reload();
+  });
+</script>

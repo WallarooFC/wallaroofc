@@ -1,0 +1,139 @@
+---
+export const prerender = false;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Committee Login — Wallaroo FC</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #050E1F;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #0A1F3D;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-top: 4px solid #C8102E;
+      border-radius: 8px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .logo img { width: 48px; height: 48px; }
+    .logo-text { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.05em; }
+    .logo-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    h1 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .subtitle { font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 32px; }
+    label { display: block; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.6); margin-bottom: 6px; }
+    input {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 15px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s;
+    }
+    input:focus { outline: none; border-color: #C8102E; }
+    button {
+      width: 100%;
+      background: #C8102E;
+      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px;
+      letter-spacing: 0.1em;
+      padding: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #8E0B20; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error { background: rgba(200,16,46,0.15); border: 1px solid rgba(200,16,46,0.4); border-radius: 4px; padding: 12px 16px; font-size: 14px; color: #ff6b6b; margin-bottom: 20px; display: none; }
+    .error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <img src="/favicon.svg" alt="" />
+      <div>
+        <div class="logo-text">Wallaroo FC</div>
+        <div class="logo-sub">Committee Portal</div>
+      </div>
+    </div>
+    <h1>Sign In</h1>
+    <p class="subtitle">Committee & volunteer access only</p>
+
+    <div class="error" id="error-msg"></div>
+
+    <form id="login-form">
+      <label for="email">Email</label>
+      <input id="email" type="email" name="email" autocomplete="email" required placeholder="you@example.com" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" />
+
+      <button type="submit" id="submit-btn">Sign In →</button>
+    </form>
+  </div>
+
+  <script>
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    const supabase = createClient(
+      import.meta.env.PUBLIC_SUPABASE_URL,
+      import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+    );
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const errEl = document.getElementById('error-msg');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      errEl.classList.remove('visible');
+
+      const email    = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        errEl.textContent = error.message;
+        errEl.classList.add('visible');
+        btn.disabled = false;
+        btn.textContent = 'Sign In →';
+        return;
+      }
+
+      // Store tokens in cookies so middleware can read them
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; SameSite=Lax`;
+      document.cookie = `sb-refresh-token=${data.session.refresh_token}; path=/; SameSite=Lax`;
+      window.location.href = '/admin';
+    });
+  </script>
+</body>
+</html>

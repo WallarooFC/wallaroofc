@@ -1,0 +1,174 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+interface Tier {
+  name: string;
+  price: string;
+  blurb: string;
+  benefits: string[];
+  featured?: boolean;
+}
+
+const tiers: Tier[] = [
+  {
+    name: 'Social',
+    price: '$50',
+    blurb: 'The best way to support the Bulldogs. Entry to Thursday members draws and every home game draw.',
+    benefits: [
+      'Club membership card',
+      'Entry into Thursday & home game members draw',
+      'Voting rights at annual general meeting',
+      'Recognition on members board',
+    ],
+  },
+  {
+    name: 'Bronze',
+    price: '$100',
+    blurb: 'Step up your support with a Bronze membership.',
+    benefits: [
+      'All Social tier benefits',
+      'Season newsletter',
+      'Invitation to season launch and presentation nights',
+    ],
+  },
+  {
+    name: 'Silver',
+    price: '$200',
+    blurb: 'A meaningful contribution that helps keep the Bulldogs running.',
+    benefits: [
+      'All Bronze tier benefits',
+      'Named on the club patron\'s board',
+      'Priority ticket access for finals',
+    ],
+    featured: true,
+  },
+  {
+    name: 'Gold',
+    price: '$300',
+    blurb: 'Gold-level support — you\'re a genuine Bulldog backer.',
+    benefits: [
+      'All Silver tier benefits',
+      'Invitation to annual patrons dinner with the committee',
+      'Club merchandise pack',
+    ],
+  },
+  {
+    name: 'Platinum',
+    price: '$500',
+    blurb: 'Our highest individual membership tier. For those who go above and beyond for the club.',
+    benefits: [
+      'All Gold tier benefits',
+      'Reserved seating at finals at Wallaroo Oval',
+      'Special recognition at season launch & presentation night',
+      'Personal acknowledgement in club communications',
+    ],
+  },
+];
+---
+<PageLayout
+  title="Membership · Wallaroo FC"
+  description="2026 Wallaroo FC memberships from $50 Social to $500 Platinum. All members go in the weekly draw every Thursday and every home game."
+>
+  <PageHero
+    eyebrow="2026 Memberships"
+    title="Bulldogs."
+    titleItalic="Belong here."
+    intro="Five tiers from $50 Social to $500 Platinum. All members go in the weekly draw — every Thursday and every home game. Memberships fund junior development, ground upkeep, and travel. Open now via the form below."
+  />
+
+  <section class="tiers-grid">
+    <div class="container">
+      {tiers.map(t => (
+        <article class={`tier${t.featured ? ' featured' : ''}`}>
+          {t.featured && <span class="badge">★ Most popular</span>}
+          <header>
+            <h2>{t.name}</h2>
+            <span class="price">{t.price}</span>
+          </header>
+          <p class="blurb">{t.blurb}</p>
+          <ul>
+            {t.benefits.map(b => <li>{b}</li>)}
+          </ul>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="join">
+    <div class="container">
+      <h2>Join the Bulldogs</h2>
+      <p>Fill in the form below and we'll send you a payment link (bank transfer or card). Your membership is active the moment payment lands.</p>
+      <form
+        class="join-form"
+        action="https://formspree.io/f/FORMSPREE_MEMBERSHIP_FORM_ID"
+        method="POST"
+      >
+        <label>Your name <input type="text" name="name" required /></label>
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Phone (optional) <input type="tel" name="phone" /></label>
+        <label>Postal address (optional)
+          <textarea name="address" rows="2"></textarea>
+        </label>
+        <label>Membership tier
+          <select name="tier" required>
+            <option value="">— select tier —</option>
+            <option value="social">Social · $50</option>
+            <option value="bronze">Bronze · $100</option>
+            <option value="silver">Silver · $200</option>
+            <option value="gold">Gold · $300</option>
+            <option value="platinum">Platinum · $500</option>
+          </select>
+        </label>
+        <label>How did you hear about us? (optional)
+          <input type="text" name="referral" />
+        </label>
+        <label class="check">
+          <input type="checkbox" name="newsletter" checked />
+          <span>Yes, send me the quarterly newsletter</span>
+        </label>
+        <input type="text" name="_gotcha" class="honeypot" tabindex="-1" autocomplete="off" aria-label="Leave this field empty" />
+        <input type="hidden" name="_subject" value="Wallaroo FC membership enquiry (website)" />
+        <button class="btn-primary" type="submit"><span>Join up</span></button>
+        <p class="form-note">We'll email you a payment link within 48 hours. Your details go to admin@wallaroofc.com.au only.</p>
+      </form>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .tiers-grid { background: var(--white); padding: 80px 32px; }
+  .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .tier { background: var(--cream); padding: 32px 28px; border-radius: 6px; border-top: 4px solid var(--red); display: flex; flex-direction: column; position: relative; }
+  .tier.featured { background: linear-gradient(135deg, var(--blue-darkest) 0%, var(--blue-deep) 100%); color: var(--white); }
+  .tier.featured h2, .tier.featured .price, .tier.featured ul { color: var(--white); }
+  .tier.featured .blurb { color: rgba(255,255,255,0.85); }
+  .badge { position: absolute; top: -12px; left: 24px; background: var(--red); color: var(--white); font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; padding: 6px 12px; border-radius: 2px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+  .tier.featured header { border-bottom-color: rgba(255,255,255,0.15); }
+  h2 { font-family: var(--display); font-size: 26px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; }
+  .price { font-family: var(--display); font-size: 36px; color: var(--red); letter-spacing: 0.02em; }
+  .blurb { font-family: var(--serif); font-size: 16px; line-height: 1.55; color: var(--charcoal); margin-bottom: 20px; }
+  ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  li { font-family: var(--body); font-size: 14px; padding-left: 22px; position: relative; line-height: 1.5; color: var(--charcoal); }
+  .tier.featured li { color: rgba(255,255,255,0.85); }
+  li::before { content: '●'; position: absolute; left: 0; color: var(--red); font-size: 14px; top: 1px; }
+
+  .join { background: var(--cream); padding: 80px 32px 120px; }
+  .join .container { display: block; max-width: 720px; }
+  .join h2 { font-family: var(--display); font-size: clamp(36px, 4vw, 56px); color: var(--blue-deep); text-transform: uppercase; margin-bottom: 16px; }
+  .join p { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--charcoal); margin-bottom: 32px; }
+  .join-form { background: var(--white); padding: 40px 36px; border-radius: 6px; border-top: 4px solid var(--red); display: flex; flex-direction: column; gap: 16px; }
+  .join-form label { display: flex; flex-direction: column; font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); gap: 6px; }
+  .join-form input, .join-form select, .join-form textarea { padding: 12px 14px; font-family: var(--body); font-size: 15px; border: 1px solid var(--line); border-radius: 4px; background: var(--cream); color: var(--charcoal); }
+  .join-form input:focus, .join-form select:focus, .join-form textarea:focus { outline: none; border-color: var(--red); }
+  .check { flex-direction: row !important; align-items: center; gap: 10px !important; text-transform: none !important; font-family: var(--body) !important; font-size: 14px !important; color: var(--charcoal) !important; letter-spacing: 0 !important; }
+  .check input { padding: 0; width: auto; }
+  .honeypot { position: absolute; left: -9999px; }
+  .btn-primary { background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--red); transition: all 0.3s; cursor: pointer; align-self: flex-start; }
+  .btn-primary:hover { background: var(--red-deep); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(200,16,46,0.3); }
+  .form-note { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--grey); margin-top: 8px; }
+
+  @media (max-width: 900px) { .tiers-grid .container { grid-template-columns: 1fr 1fr; } .tiers-grid, .join { padding: 48px 24px; } }
+  @media (max-width: 600px) { .tiers-grid .container { grid-template-columns: 1fr; } }
+</style>

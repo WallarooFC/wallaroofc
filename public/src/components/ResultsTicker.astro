@@ -1,0 +1,72 @@
+---
+interface TickerResult {
+  grade: string;
+  round: number;
+  homeName: string;
+  homeScore?: string;
+  awayName: string;
+  awayScore?: string;
+  margin?: string;
+  drawn?: boolean;
+  byeTeam?: string;
+}
+
+interface Props {
+  results: TickerResult[];
+  label?: string;
+}
+
+const { results, label = 'LAST ROUND' } = Astro.props;
+// Duplicate the list so the marquee scrolls seamlessly.
+const doubled = [...results, ...results];
+---
+<div class="results-ticker" role="region" aria-label="Latest round results">
+  <div class="ticker-inner">
+    <div class="ticker-label">{label}</div>
+    <div class="ticker-track">
+      <div class="ticker-content">
+        {doubled.map((r, i) => (
+          <>
+            {i > 0 && <span class="ticker-item sep" aria-hidden="true">●</span>}
+            {r.byeTeam ? (
+              <span class="ticker-item">
+                <span class="grade">{`BYE · R${r.round}`}</span> {r.byeTeam}
+              </span>
+            ) : (
+              <span class="ticker-item">
+                <span class="grade">{`${r.grade.toUpperCase()} · R${r.round}`}</span>
+                {r.homeName} {r.homeScore}
+                {r.drawn
+                  ? <span class="draw">DREW</span>
+                  : <span class="win">DEF</span>
+                }
+                {r.awayName} {r.awayScore}
+                {r.margin && <span class="margin">· BY {r.margin}</span>}
+              </span>
+            )}
+          </>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .results-ticker { background: var(--charcoal); color: var(--white); overflow: hidden; }
+  .ticker-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: stretch; }
+  .ticker-label { background: var(--red); padding: 18px 28px; font-family: var(--headline); font-size: 16px; letter-spacing: 0.14em; text-transform: uppercase; display: flex; align-items: center; gap: 12px; flex-shrink: 0; position: relative; }
+  .ticker-label::before { content: ''; width: 10px; height: 10px; background: white; border-radius: 50%; animation: pulse 1.4s ease-in-out infinite; }
+  .ticker-label::after { content: ''; position: absolute; right: -20px; top: 0; bottom: 0; width: 0; border-style: solid; border-width: 28px 0 28px 20px; border-color: transparent transparent transparent var(--red); }
+  .ticker-track { flex: 1; overflow: hidden; position: relative; padding-left: 28px; }
+  .ticker-content { display: inline-flex; gap: 56px; padding: 18px 32px; white-space: nowrap; animation: scroll-x 100s linear infinite; }
+  .ticker-item { font-family: var(--headline); font-size: 16px; letter-spacing: 0.06em; display: inline-flex; align-items: center; gap: 12px; }
+  .ticker-item .grade { color: var(--red); letter-spacing: 0.1em; }
+  .ticker-item .win { color: #5dd97e; }
+  .ticker-item .draw { color: #f0c040; }
+  .ticker-item .margin { color: rgba(255,255,255,0.55); font-size: 14px; }
+  .ticker-item .loss { color: #ff7c7c; }
+  .ticker-item.sep { color: rgba(255,255,255,0.2); margin: 0 8px; }
+
+  @keyframes scroll-x { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.85); } }
+</style>

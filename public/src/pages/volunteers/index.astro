@@ -1,0 +1,114 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+const roles = [
+  { role: 'Saturday Canteen', commit: '2–3 hour shifts', body: 'Burgers, drinks, hot chips. The busiest spot on game day. Friendly team, two-shift rotation around A-Grade bounce.' },
+  { role: 'Goal Umpires', commit: 'Per match', body: 'One per end. White coat, white flags. We provide a 15-minute crash course if it\'s your first time.' },
+  { role: 'Boundary Umpires', commit: 'Per match', body: 'Throw-ins, out-of-bounds calls, occasional ball-running. Fitness level: a brisk walk.' },
+  { role: 'Junior Team Manager', commit: 'Season role', body: 'One per grade. Coordinate parents, organise jumpers, handle PlayHQ admin. Approx. 2 hours per week in season.' },
+  { role: 'Match-day Photography', commit: 'As available', body: 'Phone or DSLR. Capture the action from the boundary. We upload to Facebook and the website gallery.' },
+  { role: 'Scoreboard Operator', commit: 'Per match', body: 'Run the manual scoreboard during A-Grade. Best seat in the house.' },
+  { role: 'Bulldog Ball Committee', commit: 'Pre-event (May–July)', body: 'Sponsorship, auction items, decorations, ticketing. Six people, a few short evening meetings.' },
+  { role: 'Working Bees', commit: 'Pre-season & ad-hoc', body: 'Ground prep, clubroom maintenance, equipment audits. Usually Saturday mornings, 8am start, BBQ to follow.' },
+  { role: 'Social Media', commit: 'Weekly', body: 'Post round previews, results, photos to Facebook and Instagram. Small team, shared password.' },
+  { role: 'Junior Coaching Assistant', commit: 'Weeknight training', body: 'Run drills with a head coach. AFL Auskick certification provided. Great for past players staying involved.' },
+];
+---
+<PageLayout
+  title="Volunteers · Wallaroo FC"
+  description="Country footy runs on volunteer hands. Help out at Wallaroo FC for an hour, an afternoon or a season."
+>
+  <PageHero
+    eyebrow="The Heart of the Club"
+    title="Country footy runs on"
+    titleItalic="volunteer hands."
+    intro="Dozens of volunteers make every Saturday happen. If you've got an hour, an afternoon or a season to spare — we'd love to have you."
+  />
+
+  <section class="role-list-page">
+    <div class="container">
+      <h2>2026 roles</h2>
+      <p class="lede">All training and onboarding included. No experience needed — we'll teach you everything. Police checks are organised by the club for any role working directly with juniors.</p>
+      <ul class="roles">
+        {roles.map(r => (
+          <li class="role-card">
+            <header>
+              <h3>{r.role}</h3>
+              <span class="commit">{r.commit}</span>
+            </header>
+            <p>{r.body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="signup">
+    <div class="container">
+      <h2>Put your hand up</h2>
+      <p>Fill in the form. We'll get in touch within the week with a chat about what fits your time and interests. No commitment — saying yes to a conversation is enough.</p>
+      <form
+        class="vol-form"
+        action="https://formspree.io/f/FORMSPREE_VOLUNTEER_FORM_ID"
+        method="POST"
+      >
+        <label>Your name <input type="text" name="name" required /></label>
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Phone (optional) <input type="tel" name="phone" /></label>
+        <label>Which roles interest you? (pick any number)
+          <select name="roles" multiple size="6">
+            <option value="canteen">Saturday Canteen</option>
+            <option value="umpires-goal">Goal Umpires</option>
+            <option value="umpires-boundary">Boundary Umpires</option>
+            <option value="team-manager">Junior Team Manager</option>
+            <option value="photography">Match-day Photography</option>
+            <option value="scoreboard">Scoreboard Operator</option>
+            <option value="bulldog-ball">Bulldog Ball Committee</option>
+            <option value="working-bees">Working Bees</option>
+            <option value="social-media">Social Media</option>
+            <option value="coaching">Junior Coaching Assistant</option>
+            <option value="other">Other / not sure — call me</option>
+          </select>
+        </label>
+        <label>Best time to chat (optional)
+          <input type="text" name="best-time" placeholder="e.g. Weekday evenings" />
+        </label>
+        <label>Anything else we should know? (optional)
+          <textarea name="notes" rows="4"></textarea>
+        </label>
+        <input type="text" name="_gotcha" class="honeypot" tabindex="-1" autocomplete="off" aria-label="Leave this field empty" />
+        <input type="hidden" name="_subject" value="Wallaroo FC volunteer sign-up (website)" />
+        <button class="btn-primary" type="submit"><span>Sign me up</span></button>
+        <p class="form-note">We'll be in touch within a week. Details go to admin@wallaroofc.com.au only.</p>
+      </form>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .role-list-page { background: var(--cream); padding: 80px 32px 100px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h2 { font-family: var(--display); font-size: clamp(36px, 4.5vw, 64px); color: var(--blue-deep); text-transform: uppercase; margin-bottom: 16px; }
+  .lede { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--charcoal); margin-bottom: 40px; max-width: 720px; }
+  .roles { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .role-card { background: var(--white); padding: 24px 28px; border-radius: 6px; border-left: 3px solid var(--red); }
+  .role-card header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+  .role-card h3 { font-family: var(--display); font-size: 18px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; }
+  .role-card .commit { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; color: var(--grey); text-transform: uppercase; }
+  .role-card p { font-family: var(--body); font-size: 14px; line-height: 1.55; color: var(--charcoal); }
+
+  .signup { background: var(--white); padding: 80px 32px 120px; border-top: 1px solid var(--line); }
+  .signup .container { max-width: 720px; }
+  .signup p { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--charcoal); margin-bottom: 32px; }
+  .vol-form { background: var(--cream); padding: 40px 36px; border-radius: 6px; border-top: 4px solid var(--red); display: flex; flex-direction: column; gap: 16px; }
+  .vol-form label { display: flex; flex-direction: column; font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); gap: 6px; }
+  .vol-form input, .vol-form select, .vol-form textarea { padding: 12px 14px; font-family: var(--body); font-size: 15px; border: 1px solid var(--line); border-radius: 4px; background: var(--white); color: var(--charcoal); }
+  .vol-form input:focus, .vol-form select:focus, .vol-form textarea:focus { outline: none; border-color: var(--red); }
+  .honeypot { position: absolute; left: -9999px; }
+  .btn-primary { background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--red); transition: all 0.3s; cursor: pointer; align-self: flex-start; }
+  .btn-primary:hover { background: var(--red-deep); transform: translateY(-2px); }
+  .form-note { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--grey); margin-top: 8px; }
+
+  @media (max-width: 800px) { .roles { grid-template-columns: 1fr; } .role-list-page, .signup { padding: 48px 24px; } }
+</style>

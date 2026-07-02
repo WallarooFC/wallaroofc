@@ -1,0 +1,51 @@
+---
+const cards = [
+  { figure: '1867', desc: 'Year founded.<br>One of the oldest in Australia.' },
+  { figure: '27', desc: 'A-Grade premierships<br>1889 to 2000.' },
+  { figure: '13', desc: 'Senior Colts premierships<br>1953 to 2025.' },
+  { figure: '∞', desc: 'Stories told<br>at the Bulldogs Club.' },
+];
+---
+<section class="heritage" aria-labelledby="heritage-heading">
+  <div class="heritage-watermark" aria-hidden="true">1867</div>
+  <div class="heritage-inner">
+    <div class="heritage-text reveal">
+      <div class="section-eyebrow">The Heritage</div>
+      <h2 id="heritage-heading">Founded at the Globe Inn,<span class="ital">17 June 1867.</span></h2>
+      <p>About a dozen members joined and paid their subs — then had a few preliminary kicks in the park with a first-rate ball obtained from Adelaide.</p>
+      <p>159 years later, we're still here. Never merged, never folded. The Seagulls became the Bulldogs in the late 1960s, and red joined the blue and white. Everything else, as they say, is history.</p>
+    </div>
+    <div class="heritage-stats reveal reveal-delay-2">
+      {cards.map(c => (
+        <div class="heritage-card">
+          <div class="figure">{c.figure}</div>
+          <div class="desc" set:html={c.desc} />
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .heritage { background: var(--blue-darkest); color: var(--white); position: relative; overflow: hidden; }
+  .heritage::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 80% 50%, rgba(200,16,46,0.2) 0%, transparent 60%), radial-gradient(ellipse at 10% 100%, rgba(20,49,92,0.5) 0%, transparent 50%); }
+  .heritage-watermark { position: absolute; right: -5%; top: 50%; transform: translateY(-50%); font-family: var(--display); font-size: 600px; line-height: 0.85; color: var(--white); opacity: 0.025; pointer-events: none; }
+  .heritage-inner { position: relative; z-index: 5; max-width: 1400px; margin: 0 auto; padding: 120px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .heritage-text h2 { font-family: var(--display); font-size: clamp(56px, 7vw, 104px); line-height: 0.9; margin-bottom: 32px; text-transform: uppercase; }
+  .heritage-text h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); letter-spacing: -0.02em; text-transform: none; display: block; }
+  .heritage-text p { font-family: var(--serif); font-size: 19px; line-height: 1.65; color: rgba(255,255,255,0.82); margin-bottom: 24px; max-width: 560px; }
+  .heritage-text p:first-of-type::first-letter { font-family: var(--display); font-size: 72px; float: left; line-height: 0.8; margin-right: 12px; margin-top: 4px; color: var(--red); }
+  .heritage-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .heritage-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-left: 4px solid var(--red); padding: 32px 28px; border-radius: 4px; backdrop-filter: blur(8px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .heritage-card:hover { background: rgba(200,16,46,0.08); transform: translateY(-4px); }
+  .heritage-card .figure { font-family: var(--display); font-size: 80px; color: var(--white); line-height: 1; margin-bottom: 12px; }
+  .heritage-card .desc { font-family: var(--headline); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.7); line-height: 1.4; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+
+  @media (max-width: 1100px) { .heritage-inner { grid-template-columns: 1fr; gap: 48px; padding: 80px 24px; } .heritage-text h2 { font-size: 56px; } }
+</style>

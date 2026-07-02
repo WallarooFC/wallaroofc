@@ -1,0 +1,187 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+const { data: rows } = await db.from('site_config').select('*').order('key');
+const config: Record<string, string> = {};
+for (const r of rows ?? []) config[r.key] = r.value ?? '';
+
+// Handle form submission
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const updates: { key: string; value: string }[] = [];
+  for (const [key, value] of form.entries()) {
+    updates.push({ key: key as string, value: value as string });
+  }
+  await db.from('site_config').upsert(updates);
+  return Astro.redirect('/admin/config?saved=1');
+}
+
+const saved = Astro.url.searchParams.get('saved') === '1';
+---
+<AdminLayout title="Site Settings">
+  {saved && (
+    <div class="success-banner">✓ Settings saved — changes are live on the public site</div>
+  )}
+
+  <div class="settings-grid">
+    <!-- Current Match -->
+    <div class="settings-section">
+      <h2 class="section-title">Current Match / This Week</h2>
+      <p class="section-desc">Shown in the hero section and match preview on the home page.</p>
+      <form method="post" class="settings-form">
+        <div class="form-row">
+          <label class="form-group">
+            Current Round
+            <input type="text" name="current_round" value={config.current_round ?? ''} placeholder="6" />
+          </label>
+          <label class="form-group">
+            Current Date (display)
+            <input type="text" name="current_date" value={config.current_date ?? ''} placeholder="Sat 20 May" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Opponent (slug, lowercase)
+            <input type="text" name="next_match_opponent" value={config.next_match_opponent ?? ''} placeholder="ardrossan" />
+          </label>
+          <label class="form-group">
+            Opponent Name (display)
+            <input type="text" name="next_match_opponent_name" value={config.next_match_opponent_name ?? ''} placeholder="Ardrossan" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Home or Away
+            <select name="next_match_home_or_away">
+              <option value="HOME" selected={config.next_match_home_or_away === 'HOME'}>HOME</option>
+              <option value="AWAY" selected={config.next_match_home_or_away === 'AWAY'}>AWAY</option>
+            </select>
+          </label>
+          <label class="form-group">
+            Match Date (display)
+            <input type="text" name="next_match_date" value={config.next_match_date ?? ''} placeholder="Sat 20 May" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Venue Name
+            <input type="text" name="next_match_venue" value={config.next_match_venue ?? ''} placeholder="Ardrossan" />
+          </label>
+          <label class="form-group">
+            Bounce Time
+            <input type="text" name="next_match_bounce" value={config.next_match_bounce ?? ''} placeholder="2:40 PM" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Our Record
+            <input type="text" name="our_record" value={config.our_record ?? ''} placeholder="4W 1L" />
+          </label>
+          <label class="form-group">
+            Opponent Record
+            <input type="text" name="next_match_opponent_record" value={config.next_match_opponent_record ?? ''} placeholder="3W 2L" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Venue Full Name
+            <input type="text" name="this_week_venue" value={config.this_week_venue ?? ''} placeholder="Ardrossan Oval" />
+          </label>
+          <label class="form-group">
+            Home/Away Label
+            <input type="text" name="this_week_venue_label" value={config.this_week_venue_label ?? ''} placeholder="Away" />
+          </label>
+        </div>
+        <div class="save-row">
+          <button type="submit" class="btn-primary">Save Match Settings</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Club stats -->
+    <div class="settings-section">
+      <h2 class="section-title">Club Stats (Hero)</h2>
+      <p class="section-desc">The headline numbers shown in the hero section.</p>
+      <form method="post" class="settings-form">
+        <div class="form-row">
+          <label class="form-group">
+            Years Strong
+            <input type="text" name="stat_years" value={config.stat_years ?? '70+'} placeholder="70+" />
+          </label>
+          <label class="form-group">
+            Members
+            <input type="text" name="stat_members" value={config.stat_members ?? '159'} placeholder="159" />
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="form-group">
+            Teams
+            <input type="text" name="stat_teams" value={config.stat_teams ?? '5'} placeholder="5" />
+          </label>
+          <label class="form-group">
+            Premierships
+            <input type="text" name="stat_premierships" value={config.stat_premierships ?? '27'} placeholder="27" />
+          </label>
+        </div>
+        <div class="save-row">
+          <button type="submit" class="btn-primary">Save Stats</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- All config (raw) -->
+    <div class="settings-section">
+      <h2 class="section-title">All Config Keys</h2>
+      <p class="section-desc">Current values stored in the database.</p>
+      <div class="config-table">
+        <table>
+          <thead>
+            <tr><th>Key</th><th>Value</th><th>Updated</th></tr>
+          </thead>
+          <tbody>
+            {(rows ?? []).map((r: any) => (
+              <tr>
+                <td class="config-key">{r.key}</td>
+                <td class="config-val">{r.value ?? <em>null</em>}</td>
+                <td class="config-date">{new Date(r.updated_at).toLocaleDateString('en-AU')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .success-banner { background:rgba(74,222,128,0.15); border:1px solid rgba(74,222,128,0.3); border-radius:8px; padding:12px 16px; margin-bottom:24px; color:#4ade80; font-size:14px; }
+
+  .settings-grid { display:flex; flex-direction:column; gap:32px; }
+  .settings-section { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:10px; padding:24px; }
+  .section-title { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:0.05em; margin-bottom:4px; }
+  .section-desc { font-size:13px; color:var(--admin-muted); margin-bottom:20px; }
+
+  .settings-form { display:flex; flex-direction:column; gap:14px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--admin-muted); }
+  .form-group input, .form-group select {
+    background:#081426; border:1px solid var(--admin-border); color:var(--admin-text);
+    border-radius:6px; padding:8px 12px; font-size:14px; font-family:inherit;
+  }
+  .form-group input:focus, .form-group select:focus { outline:none; border-color:#C8102E; }
+  .save-row { display:flex; justify-content:flex-end; margin-top:4px; }
+  .btn-primary { background:#C8102E; color:#fff; border:none; border-radius:6px; padding:9px 20px; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn-primary:hover { background:#a50d24; }
+
+  .config-table { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; padding:8px 12px; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--admin-muted); border-bottom:1px solid var(--admin-border); }
+  td { padding:8px 12px; border-bottom:1px solid var(--admin-border); }
+  .config-key { font-family:monospace; color:#8ab4f8; }
+  .config-val { color:var(--admin-text); }
+  .config-date { color:var(--admin-muted); font-size:12px; white-space:nowrap; }
+</style>

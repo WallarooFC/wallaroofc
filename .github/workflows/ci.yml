@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portal:
+    name: portal · typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portal
+    env:
+      SKIP_ENV_VALIDATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: portal/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+  public-site:
+    name: public · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: public
+    # Publish secrets at the job level so their emptiness can be tested in
+    # step-level `if:` expressions via the `env` context. The Astro build
+    # needs at minimum PUBLIC_SUPABASE_URL + PUBLIC_SUPABASE_ANON_KEY to
+    # prerender pages that hit Supabase; PlayHQ + service-role are only
+    # needed by specific routes but are exposed here so future pages that
+    # use them build cleanly once the secrets are wired up.
+    env:
+      PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+      PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PLAYHQ_ORG_ID: ${{ secrets.PLAYHQ_ORG_ID }}
+      PLAYHQ_COMPETITION_ID: ${{ secrets.PLAYHQ_COMPETITION_ID }}
+      PLAYHQ_API_KEY: ${{ secrets.PLAYHQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: public/package-lock.json
+
+      - run: npm ci
+
+      - name: Build Astro site
+        if: ${{ env.PUBLIC_SUPABASE_URL != '' && env.PUBLIC_SUPABASE_ANON_KEY != '' }}
+        run: npm run build
+
+      - name: Note skipped build (missing Supabase secrets)
+        if: ${{ env.PUBLIC_SUPABASE_URL == '' || env.PUBLIC_SUPABASE_ANON_KEY == '' }}
+        run: |
+          echo "::warning::Astro build skipped — set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY as GitHub Actions secrets to enable it."

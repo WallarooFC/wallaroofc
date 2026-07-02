@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Decap CMS admin — visible but uninteresting to search engines.
+Disallow: /admin/
+
+Sitemap: https://wallaroofc.com.au/sitemap-index.xml

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wallaroo FC — Business Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fraunces:ital@1&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --red:     #C8102E;
+    --navy:    #0A1F3D;
+    --darkest: #050E1F;
+    --cream:   #F5F1E8;
+    --charcoal:#15171C;
+    --grey:    #595D63;
+    --line:    #DAD3C2;
+  }
+
+  @page { size: auto; margin: 12mm; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #E8E4DC;
+    padding: 16mm;
+    display: flex;
+    gap: 8mm;
+    flex-wrap: wrap;
+  }
+
+  /* 85mm × 54mm at 96dpi ≈ 321 × 204px
+     We use mm units so it's print-accurate */
+
+  .card {
+    width: 85mm;
+    height: 54mm;
+    border-radius: 2mm;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+
+  /* ── FRONT ─────────────────────────────── */
+  .card-front {
+    background: var(--navy);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top accent bar */
+  .cf-topbar {
+    height: 3mm;
+    background: var(--red);
+    flex-shrink: 0;
+  }
+
+  /* Content area */
+  .cf-body {
+    flex: 1;
+    padding: 5mm 6mm 4mm;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Faint watermark crest */
+  .cf-watermark {
+    position: absolute;
+    right: -4mm;
+    bottom: -4mm;
+    width: 28mm;
+    height: 28mm;
+    opacity: 0.06;
+  }
+
+  .cf-name {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 16pt;
+    color: white;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    line-height: 1;
+    margin-bottom: 1mm;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cf-role {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 8pt;
+    color: var(--red);
+    letter-spacing: 0.02em;
+    margin-bottom: 4mm;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cf-divider {
+    width: 12mm;
+    height: 2px;
+    background: rgba(200,16,46,0.4);
+    margin-bottom: 4mm;
+    flex-shrink: 0;
+  }
+
+  .cf-contacts {
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cf-contact-row {
+    display: flex;
+    align-items: center;
+    gap: 2mm;
+  }
+
+  .cf-contact-label {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 5.5pt;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    width: 10mm;
+    flex-shrink: 0;
+  }
+
+  .cf-contact-value {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 7pt;
+    color: rgba(255,255,255,0.82);
+  }
+
+  /* Bottom strip */
+  .cf-footer {
+    height: 8mm;
+    background: var(--darkest);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6mm;
+    flex-shrink: 0;
+  }
+
+  .cf-footer-club {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 6.5pt;
+    letter-spacing: 0.14em;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+  }
+
+  .cf-footer-web {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 6.5pt;
+    letter-spacing: 0.1em;
+    color: var(--red);
+    text-transform: uppercase;
+  }
+
+  /* ── BACK ──────────────────────────────── */
+  .card-back {
+    background: var(--darkest);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Subtle red radial glow */
+  .card-back::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 70% 40%, rgba(200,16,46,0.22) 0%, transparent 65%);
+  }
+
+  .cb-top-rule {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3mm;
+    background: var(--red);
+  }
+
+  .cb-crest {
+    width: 18mm;
+    height: 18mm;
+    margin-bottom: 3.5mm;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cb-name {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 11pt;
+    color: white;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.15;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cb-tagline {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 7.5pt;
+    color: rgba(200,16,46,0.85);
+    margin-top: 2mm;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cb-bottom-rule {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.5mm;
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* ── LABELS ─────────────────────────────── */
+  .card-label {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    color: #888;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 3mm;
+    width: 85mm;
+    text-align: center;
+  }
+
+  .set-label {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 0.1em;
+    color: #555;
+    text-transform: uppercase;
+    margin-bottom: 5mm;
+    width: 100%;
+  }
+
+  @media print {
+    body { background: white; padding: 8mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .card-label { display: none; }
+    .set-label { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div style="width:100%; display:flex; gap:8mm; flex-wrap:wrap;">
+
+    <!-- FRONT -->
+    <div>
+      <div class="card card-front">
+        <div class="cf-topbar"></div>
+        <div class="cf-body">
+          <!-- Watermark crest -->
+          <div class="cf-watermark">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="white" width="100%" height="100%">
+              <path d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z"/>
+            </svg>
+          </div>
+
+          <div class="cf-name">[First Name]<br>[Last Name]</div>
+          <div class="cf-role">[Position Title]</div>
+          <div class="cf-divider"></div>
+          <div class="cf-contacts">
+            <div class="cf-contact-row">
+              <span class="cf-contact-label">Mob</span>
+              <span class="cf-contact-value">04__ ___ ___</span>
+            </div>
+            <div class="cf-contact-row">
+              <span class="cf-contact-label">Email</span>
+              <span class="cf-contact-value">name@wallaroofc.com.au</span>
+            </div>
+          </div>
+        </div>
+        <div class="cf-footer">
+          <span class="cf-footer-club">Wallaroo Football Club</span>
+          <span class="cf-footer-web">wallaroo-fc.vercel.app</span>
+        </div>
+      </div>
+      <div class="card-label">Front</div>
+    </div>
+
+    <!-- BACK -->
+    <div>
+      <div class="card card-back">
+        <div class="cb-top-rule"></div>
+        <div class="cb-crest">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="white" width="100%" height="100%">
+            <path d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z"/>
+          </svg>
+        </div>
+        <div class="cb-name">Wallaroo<br>Football Club</div>
+        <div class="cb-tagline">est. 1879 · Go Bulldogs</div>
+        <div class="cb-bottom-rule"></div>
+      </div>
+      <div class="card-label">Back</div>
+    </div>
+
+  </div>
+
+  <p style="font-family:'Inter',sans-serif;font-size:8pt;color:#999;margin-top:6mm;width:100%;">
+    Print at 100% scale · 85 × 54 mm · Use card stock 350–400 gsm · Full bleed recommended
+  </p>
+
+</body>
+</html>

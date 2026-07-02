@@ -1,0 +1,35 @@
+round: 5
+date: Sat 9 May
+games:
+  - grade: A-Grade
+    homeName: Wallaroo
+    homeScore: 9.13 (67)
+    awayName: Bute
+    awayScore: 8.12 (60)
+    margin: 7 pts
+
+  - grade: A-Grade
+    homeName: Kadina
+    homeScore: 10.9 (69)
+    awayName: Paskeville
+    awayScore: 10.7 (67)
+    margin: 2 pts
+
+  - grade: A-Grade
+    homeName: CMS Crows
+    homeScore: 18.23 (131)
+    awayName: Ardrossan
+    awayScore: 1.2 (8)
+    margin: 123 pts
+
+  - grade: A-Grade
+    homeName: Moonta
+    homeScore: 8.12 (60)
+    awayName: Southern Eagles
+    awayScore: 8.8 (56)
+    margin: 4 pts
+
+  - grade: Bye
+    homeName: ''
+    awayName: ''
+    byeTeam: Central Yorke

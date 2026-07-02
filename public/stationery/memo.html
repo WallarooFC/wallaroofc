@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wallaroo FC — Club Memo / Notice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fraunces:ital,wght@0,400;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --red:     #C8102E;
+    --navy:    #0A1F3D;
+    --darkest: #050E1F;
+    --cream:   #F5F1E8;
+    --charcoal:#15171C;
+    --grey:    #595D63;
+    --line:    #DAD3C2;
+  }
+
+  @page { size: A4; margin: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: white;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+  }
+
+  /* ── HEADER ─────────────────────────────── */
+  .memo-header {
+    background: var(--navy);
+    padding: 10mm 18mm 9mm;
+    display: flex;
+    align-items: center;
+    gap: 6mm;
+  }
+
+  .memo-crest {
+    width: 12mm;
+    height: 12mm;
+    flex-shrink: 0;
+  }
+
+  .memo-club-name {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 13pt;
+    letter-spacing: 0.05em;
+    color: white;
+    text-transform: uppercase;
+    flex: 1;
+  }
+
+  .memo-type-label {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 9pt;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.38);
+    text-transform: uppercase;
+  }
+
+  /* ── RED BAND ───────────────────────────── */
+  .memo-band {
+    height: 3px;
+    background: var(--red);
+  }
+
+  /* ── META STRIP ─────────────────────────── */
+  .memo-meta {
+    background: var(--cream);
+    padding: 6mm 18mm;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .memo-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 12mm;
+  }
+
+  .memo-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+  }
+
+  .memo-meta-label {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey);
+    flex-shrink: 0;
+    width: 14mm;
+  }
+
+  .memo-meta-value {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    color: var(--charcoal);
+    border-bottom: 1px solid var(--line);
+    flex: 1;
+    padding-bottom: 1mm;
+  }
+
+  /* ── SUBJECT ────────────────────────────── */
+  .memo-subject-wrap {
+    padding: 7mm 18mm;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .memo-subject-label {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 7pt;
+    letter-spacing: 0.16em;
+    color: var(--grey);
+    text-transform: uppercase;
+    margin-bottom: 2mm;
+  }
+
+  .memo-subject-text {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 18pt;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+  }
+
+  .memo-subject-text::before {
+    content: '';
+    display: inline-block;
+    width: 4mm;
+    height: 8mm;
+    background: var(--red);
+    flex-shrink: 0;
+  }
+
+  /* ── BODY ───────────────────────────────── */
+  .memo-body {
+    padding: 9mm 18mm;
+    min-height: 160mm;
+  }
+
+  .memo-body p {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 5mm;
+  }
+
+  /* Action items box */
+  .memo-actions {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--red);
+    border-radius: 2mm;
+    padding: 6mm 8mm;
+    margin: 7mm 0;
+  }
+
+  .memo-actions-heading {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 9pt;
+    letter-spacing: 0.12em;
+    color: var(--navy);
+    text-transform: uppercase;
+    margin-bottom: 4mm;
+  }
+
+  .memo-actions ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5mm;
+    padding: 0;
+  }
+
+  .memo-actions li {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9.5pt;
+    color: var(--charcoal);
+    display: flex;
+    gap: 3mm;
+    align-items: baseline;
+  }
+
+  .memo-actions li::before {
+    content: '→';
+    color: var(--red);
+    font-size: 9pt;
+    flex-shrink: 0;
+  }
+
+  /* ── FOOTER ─────────────────────────────── */
+  .memo-footer-rule {
+    height: 3px;
+    background: var(--red);
+    margin: 0 18mm;
+  }
+
+  .memo-footer {
+    padding: 4mm 18mm 8mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .memo-footer-left {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 7pt;
+    color: var(--grey);
+    line-height: 1.5;
+  }
+
+  .memo-footer-url {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 8pt;
+    letter-spacing: 0.1em;
+    color: var(--red);
+    text-transform: uppercase;
+  }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="memo-header">
+    <div class="memo-crest">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="white" width="100%" height="100%">
+        <path d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z"/>
+      </svg>
+    </div>
+    <span class="memo-club-name">Wallaroo Football Club</span>
+    <span class="memo-type-label">Internal Memo</span>
+  </header>
+
+  <div class="memo-band"></div>
+
+  <!-- META -->
+  <div class="memo-meta">
+    <div class="memo-meta-grid">
+      <div class="memo-meta-item">
+        <span class="memo-meta-label">To</span>
+        <span class="memo-meta-value">[Recipient / Group]</span>
+      </div>
+      <div class="memo-meta-item">
+        <span class="memo-meta-label">Date</span>
+        <span class="memo-meta-value">_________ 2026</span>
+      </div>
+      <div class="memo-meta-item">
+        <span class="memo-meta-label">From</span>
+        <span class="memo-meta-value">[Name · Role]</span>
+      </div>
+      <div class="memo-meta-item">
+        <span class="memo-meta-label">Ref</span>
+        <span class="memo-meta-value">WFC-2026-____</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBJECT -->
+  <div class="memo-subject-wrap">
+    <div class="memo-subject-label">Re</div>
+    <div class="memo-subject-text">[Subject of Memo]</div>
+  </div>
+
+  <!-- BODY -->
+  <div class="memo-body">
+    <p>
+      [Opening paragraph. State the purpose of this memo clearly. Who needs to know this,
+      what action is required, and by when.]
+    </p>
+    <p>
+      [Background or context paragraph. Include any supporting information the recipient
+      needs to understand the situation or decision.]
+    </p>
+
+    <div class="memo-actions">
+      <div class="memo-actions-heading">Action Items</div>
+      <ul>
+        <li>[Action item one — owner — deadline]</li>
+        <li>[Action item two — owner — deadline]</li>
+        <li>[Action item three — owner — deadline]</li>
+      </ul>
+    </div>
+
+    <p>
+      [Closing paragraph. Contact details for questions, next steps, or any further
+      information required.]
+    </p>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="memo-footer-rule"></div>
+  <footer class="memo-footer">
+    <div class="memo-footer-left">
+      Wallaroo Football Club · Wallaroo Oval, Cornish Terrace · Wallaroo SA 5556<br>
+      Yorke Peninsula Football League · est. 1879
+    </div>
+    <div class="memo-footer-url">wallaroo-fc.vercel.app</div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,504 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import PremiershipWall from '../../components/PremiershipWall.astro';
+import Heritage from '../../components/Heritage.astro';
+import { CLASSIC_BOARD, EXPANDED_BOARD, MAIL_MEDALS, GOAL_KICKERS, LIFE_MEMBERS, GAMES_CLUB } from '../../lib/honour-roll.ts';
+
+// Premierships by grade
+const GRADE_FLAGS = [
+  {
+    grade: 'A Grade',
+    count: 27,
+    years: [1889,1892,1896,1897,1899,1900,1902,1905,1913,1914,1919,1920,1925,1927,1945,1950,1952,1953,1954,1976,1983,1990,1992,1996,1997,1998,2000],
+  },
+  {
+    grade: 'Reserves / A2 / B Grade',
+    count: 7,
+    years: [1952,1958,1982,1990,1996,1997,1998],
+  },
+  {
+    grade: 'Senior Colts',
+    count: 13,
+    years: [1953,1959,1962,1964,1981,1987,1988,1993,2014,2022,2023,2024,2025],
+  },
+  {
+    grade: 'Junior Colts',
+    count: 4,
+    years: [1991,2021,2022,2025],
+  },
+  {
+    grade: 'Combined Juniors / Reserves (pre-1946)',
+    count: 9,
+    years: [1911,1912,1925,1926,1927,1934,1936,1942,1943],
+  },
+];
+
+// A Grade flag years for highlighting
+const A_FLAG_YEARS = new Set([1889,1892,1896,1897,1899,1900,1902,1905,1913,1914,1919,1920,1925,1927,1945,1950,1952,1953,1954,1976,1983,1990,1992,1996,1997,1998,2000]);
+
+// Special awards
+const FRANK_AWARDS = EXPANDED_BOARD.filter(r => r.frank).map(r => ({ year: r.year, winner: r.frank }));
+const BOWMAN_AWARDS = EXPANDED_BOARD.filter(r => r.bowman).map(r => ({ year: r.year, winner: r.bowman }));
+
+// B Grade board — only rows with at least one entry
+const B_BOARD = EXPANDED_BOARD.filter(r => r.b_coach || r.b_captain || r.b_bf || r.b_goals);
+
+// Games club grouped by band
+const gamesByBand = [
+  { label: '300+ Games',  rows: GAMES_CLUB.filter(p => p.games >= 300) },
+  { label: '250+ Games',  rows: GAMES_CLUB.filter(p => p.games >= 250 && p.games < 300) },
+  { label: '200+ Games',  rows: GAMES_CLUB.filter(p => p.games >= 200 && p.games < 250) },
+  { label: '150+ Games',  rows: GAMES_CLUB.filter(p => p.games >= 150 && p.games < 200) },
+];
+
+// Life members grouped by decade
+const decades: { decade: string; rows: typeof LIFE_MEMBERS }[] = [];
+let currentDecade = -1;
+for (const m of [...LIFE_MEMBERS].sort((a, b) => a.year - b.year)) {
+  const dec = Math.floor(m.year / 10) * 10;
+  if (dec !== currentDecade) {
+    currentDecade = dec;
+    decades.push({ decade: `${dec}s`, rows: [] });
+  }
+  decades[decades.length - 1].rows.push(m);
+}
+---
+<PageLayout
+  title="Heritage & History · Wallaroo FC"
+  description="Founded 17 June 1867 at the Globe Inn. One of Australia's oldest continuously running football clubs. Club records from 1900, honor boards, 89 life members, 150 Games Club."
+>
+  <PageHero
+    eyebrow="The Heritage"
+    title="Founded at the Globe Inn,"
+    titleItalic="17 June 1867."
+    intro="159 winters on the Yorke Peninsula. Never merged, never folded. One of Australia's oldest continuously running football clubs."
+  />
+
+  <Heritage />
+
+  <PremiershipWall />
+
+  <!-- All grades premiership records -->
+  <section class="all-grades">
+    <div class="container wide">
+      <div class="eyebrow">The Full Record</div>
+      <h2>Premierships <span class="ital">across all grades.</span></h2>
+      <p class="lede">From junior ranks to A Grade, the Bulldogs have lifted a combined 60 flags. Here's the full record by grade.</p>
+      <div class="grade-grid">
+        {GRADE_FLAGS.map(g => (
+          <div class="grade-card">
+            <div class="grade-name">{g.grade}</div>
+            <div class="grade-count">{g.count}</div>
+            <div class="grade-years">{g.years.join('  ·  ')}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Club Officials 1900–2026 -->
+  <section class="board-section">
+    <div class="container wide">
+      <div class="eyebrow">Club Officials</div>
+      <h2>Presidents, Secretaries <span class="ital">&amp; Treasurers.</span></h2>
+      <p class="lede">Every office-bearer on record from 1900 to present.</p>
+
+      <h3 class="sub-heading">1900 – 1969</h3>
+      <div class="hb-wrap">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>President</th>
+              <th>Secretary</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CLASSIC_BOARD.map(r => (
+              <tr>
+                <td class="year-cell">{r.year}</td>
+                <td>{r.president || '—'}</td>
+                <td>{r.secretary || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading" style="margin-top:48px">1970 – 2026</h3>
+      <div class="hb-wrap">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>President</th>
+              <th>Secretary</th>
+              <th>Treasurer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {EXPANDED_BOARD.map(r => (
+              <tr>
+                <td class="year-cell">{r.year}</td>
+                <td>{r.president || '—'}</td>
+                <td>{r.secretary || '—'}</td>
+                <td>{r.treasurer || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- A Grade Honor Board -->
+  <section class="board-section alt">
+    <div class="container wide">
+      <div class="eyebrow">Honor Board</div>
+      <h2>A Grade <span class="ital">year by year.</span></h2>
+      <p class="lede">Captain, coach, best and fairest, and leading goalkicker for every A Grade season on record. ★ marks a premiership year.</p>
+
+      <h3 class="sub-heading">1900 – 1969 &nbsp;<span class="sub-note">(captain only recorded)</span></h3>
+      <div class="hb-wrap">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>A Grade Captain</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CLASSIC_BOARD.map(r => (
+              <tr class={A_FLAG_YEARS.has(r.year) ? 'flag-year' : ''}>
+                <td class="year-cell">{r.year}{A_FLAG_YEARS.has(r.year) ? ' ★' : ''}</td>
+                <td>{r.a_captain || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub-heading" style="margin-top:48px">1970 – 2026</h3>
+      <div class="hb-wrap">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Coach</th>
+              <th>Captain</th>
+              <th>Best &amp; Fairest</th>
+              <th>Leading Goals</th>
+            </tr>
+          </thead>
+          <tbody>
+            {EXPANDED_BOARD.map(r => (
+              <tr class={A_FLAG_YEARS.has(r.year) ? 'flag-year' : ''}>
+                <td class="year-cell">{r.year}{A_FLAG_YEARS.has(r.year) ? ' ★' : ''}</td>
+                <td>{r.a_coach || '—'}</td>
+                <td>{r.a_captain || '—'}</td>
+                <td>{r.a_bf || '—'}</td>
+                <td>{r.a_goals || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- B Grade Honor Board -->
+  <section class="board-section">
+    <div class="container wide">
+      <div class="eyebrow">Honor Board</div>
+      <h2>B Grade <span class="ital">year by year.</span></h2>
+      <p class="lede">Coach, captain, best and fairest, and leading goalkicker for B Grade seasons on record.</p>
+      <div class="hb-wrap">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Coach</th>
+              <th>Captain</th>
+              <th>Best &amp; Fairest</th>
+              <th>Leading Goals</th>
+            </tr>
+          </thead>
+          <tbody>
+            {B_BOARD.map(r => (
+              <tr>
+                <td class="year-cell">{r.year}</td>
+                <td>{r.b_coach || '—'}</td>
+                <td>{r.b_captain || '—'}</td>
+                <td>{r.b_bf || '—'}</td>
+                <td>{r.b_goals || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Special Club Awards -->
+  <section class="awards-section alt">
+    <div class="container wide">
+      <div class="eyebrow">Special Awards</div>
+      <h2>Club <span class="ital">awards.</span></h2>
+      <p class="lede">Annual club awards recognising outstanding contribution and achievement.</p>
+      <div class="awards-cols">
+        <div class="award-col">
+          <h3 class="award-title">Frank Dietritch Award</h3>
+          <table class="award-table">
+            <thead><tr><th>Year</th><th>Winner</th></tr></thead>
+            <tbody>
+              {FRANK_AWARDS.map(a => (
+                <tr><td class="year-cell">{a.year}</td><td>{a.winner}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div class="award-col">
+          <h3 class="award-title">Bowman 31 Award</h3>
+          <table class="award-table">
+            <thead><tr><th>Year</th><th>Winner</th></tr></thead>
+            <tbody>
+              {BOWMAN_AWARDS.map(a => (
+                <tr><td class="year-cell">{a.year}</td><td>{a.winner}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- League Awards -->
+  <section class="awards-section">
+    <div class="container wide">
+      <div class="eyebrow">League Awards</div>
+      <h2>YPFL <span class="ital">awards.</span></h2>
+      <p class="lede">Yorke Peninsula Football League individual awards won by Wallaroo FC players.</p>
+      <div class="awards-cols">
+        <div class="award-col">
+          <h3 class="award-title">Mail Medal</h3>
+          <table class="award-table">
+            <thead><tr><th>Year</th><th>Winner</th><th>Grade</th></tr></thead>
+            <tbody>
+              {MAIL_MEDALS.map(a => (
+                <tr><td class="year-cell">{a.year}</td><td>{a.winner}</td><td class="grade-tag">{a.grade}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div class="award-col">
+          <h3 class="award-title">Leading Goal Kicker</h3>
+          <table class="award-table">
+            <thead><tr><th>Year</th><th>Winner</th><th>Goals</th></tr></thead>
+            <tbody>
+              {GOAL_KICKERS.map(a => (
+                <tr><td class="year-cell">{a.year}</td><td>{a.winner}</td><td class="goals-count">{a.goals}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Life Members -->
+  <section class="life-members alt">
+    <div class="container wide">
+      <div class="eyebrow">Honour Roll</div>
+      <h2>Life Members <span class="ital">since 1945.</span></h2>
+      <p class="lede">89 names. Each inducted by committee vote for a lifetime's service to the club. Without these people, there is no Bulldogs.</p>
+      <div class="decades">
+        {decades.map(d => (
+          <div class="decade">
+            <h3>{d.decade}</h3>
+            <ul>
+              {d.rows.map(m => (
+                <li><span class="year">{m.year}</span><span class="name">{m.name}</span></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- 150 Games Club -->
+  <section class="games-club">
+    <div class="container wide">
+      <div class="eyebrow">The 150 Games Club</div>
+      <h2><span class="ital">A century and a half.</span></h2>
+      <p class="lede">Bulldogs who have played 150 or more senior games for the club. Led by <strong>Darren Smith (390)</strong> and <strong>Lindsay Smith (312)</strong> — two men, more than 700 games between them.</p>
+      <div class="bands">
+        {gamesByBand.map(band => (
+          <div class="band">
+            <h3>{band.label}</h3>
+            <ol class="players">
+              {band.rows.map(p => (
+                <li>
+                  <span class="name">{p.name}</span>
+                  {p.games > 0 ? <span class="games">{p.games}</span> : <span class="games games-lm">LM</span>}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- The Story -->
+  <section class="long-form">
+    <div class="container narrow">
+      <h2>The story</h2>
+
+      <h3>17 June 1867 · the Globe Inn</h3>
+      <p>The club was established on the evening of 17 June 1867, at a meeting held at the Globe Inn. <strong>The Globe Inn still stands today as the Weeroona Hotel</strong> — same walls, same Wallaroo street corner.</p>
+      <p>The minute book records the moment plainly: <em>"about a dozen members joined and paid their subs, then had a few preliminary kicks in the park with a first-rate ball obtained from Adelaide."</em></p>
+      <p>The inaugural match was scheduled for <strong>20 June 1867</strong>, at a ground west of Mr Shepherdson's property — near the western end of town, close to where the silos stand today.</p>
+
+      <h3>First recorded game · 1874</h3>
+      <p>The first officially recorded game took place in <strong>1874 between Wallaroo and Moonta</strong>. Wallaroo wore blue. Moonta wore pink. Australian rules football was barely codified.</p>
+      <p>Comprehensive results, team lists and premiership records survive from <strong>1888 onward</strong>, maintained continuously through every era since.</p>
+
+      <h3>Red joins the blue and white</h3>
+      <p>Through the early 20th century the club won A-Grade premierships across multiple competitions. In the late 1960s the nickname shifted from the Seagulls to the Bulldogs, and red joined the blue and white — the colours every player and supporter wears today.</p>
+      <p>The first Bulldog flag came soon after. Senior Colts have added five flags since 2014.</p>
+
+      <h3>Same ground, six generations</h3>
+      <p>Wallaroo FC has played on the same patch of ground — Cornish Terrace, Wallaroo — since 1867. The clubrooms have been rebuilt, the oval re-turfed, the scoreboard digitised — but every player who has ever pulled on the jumper has done so on the same Wallaroo Oval grass.</p>
+      <p>Many families across the Yorke Peninsula are now into their fifth or sixth generation of Bulldogs.</p>
+
+      <h3>Through every era</h3>
+      <p>Two World Wars. The Great Depression. The decline and revival of country football. Mining boom, mining bust. Drought years. The merger talks of the 80s — and the firm decision to stay independent. The Bulldogs played through all of it.</p>
+      <p>If you've spent any time around the clubrooms you've heard the stories. Every Bulldog you meet has one to tell.</p>
+
+      <h3>Acknowledgment of Country</h3>
+      <p>Wallaroo Football Club acknowledges the Narungga people as the Traditional Custodians of the lands on which we play, train and gather. We pay our respects to Elders past and present, and recognise the continuing connection of First Nations people to the country, waters and culture of the Yorke Peninsula.</p>
+
+      <h3>Archives &amp; research</h3>
+      <p>The club holds an archive of minute books, jumpers, photographs, team-of-year records and complete premiership records from 1888 to present, maintained by club Historian <strong>Michael West</strong>. Researchers and family-history enthusiasts are welcome to make an appointment via <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a>.</p>
+      <p class="note">★ The premiership years highlighted are representative pending verification with the Historian. If you spot an error, please get in touch.</p>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  /* ── Shared utilities ───────────────────────────────────────────────── */
+  .container { margin: 0 auto; }
+  .container.wide  { max-width: 1200px; }
+  .container.narrow { max-width: 760px; font-family: var(--serif); font-size: 18px; line-height: 1.7; color: var(--charcoal); }
+
+  .eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+
+  h2 { font-family: var(--display); font-size: clamp(40px, 5vw, 64px); text-transform: uppercase; line-height: 0.95; margin-bottom: 16px; }
+  h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+
+  .lede { font-family: var(--serif); font-size: 19px; line-height: 1.65; margin-bottom: 40px; max-width: 720px; }
+
+  .sub-heading { font-family: var(--display); font-size: 20px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue-deep); margin: 0 0 16px; }
+  .sub-note { font-family: var(--serif); font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--grey); font-style: italic; }
+
+  /* ── Shared table ───────────────────────────────────────────────────── */
+  .hb-wrap { overflow-x: auto; border-radius: 6px; box-shadow: 0 2px 16px rgba(0,0,0,0.07); margin-bottom: 8px; }
+  .hb-table { width: 100%; border-collapse: collapse; background: var(--white); font-family: var(--body); font-size: 14px; }
+  .hb-table thead th { background: var(--blue-deep); color: var(--white); font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; padding: 12px 16px; text-align: left; white-space: nowrap; }
+  .hb-table tbody tr { border-bottom: 1px solid var(--line); transition: background 0.15s; }
+  .hb-table tbody tr:hover { background: rgba(20,49,92,0.04); }
+  .hb-table tbody td { padding: 9px 16px; color: var(--charcoal); vertical-align: middle; }
+  .hb-table tbody tr.flag-year { background: rgba(200,16,46,0.06); }
+  .hb-table tbody tr.flag-year:hover { background: rgba(200,16,46,0.10); }
+  .year-cell { font-family: var(--display); font-size: 14px; color: var(--blue-deep); letter-spacing: 0.04em; white-space: nowrap; font-weight: 700; }
+  .flag-year .year-cell { color: var(--red); }
+
+  /* ── Section backgrounds ────────────────────────────────────────────── */
+  .all-grades   { background: var(--blue-darkest); color: var(--white); padding: 100px 32px; }
+  .board-section { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .board-section.alt { background: var(--cream); }
+  .awards-section { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .awards-section.alt { background: var(--cream); }
+  .life-members.alt { background: var(--cream); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .games-club   { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .long-form    { background: var(--cream); padding: 100px 32px; border-top: 1px solid var(--line); }
+
+  /* ── All Grades section ─────────────────────────────────────────────── */
+  .all-grades h2 { font-size: clamp(40px, 5vw, 72px); line-height: 0.92; }
+  .all-grades .lede { color: rgba(255,255,255,0.75); }
+  .grade-grid { display: flex; flex-direction: column; gap: 16px; }
+  .grade-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-left: 4px solid var(--red); padding: 24px 28px; border-radius: 4px; display: grid; grid-template-columns: 260px 56px 1fr; align-items: baseline; gap: 24px; }
+  .grade-name  { font-family: var(--display); font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.9); }
+  .grade-count { font-family: var(--display); font-size: 36px; color: var(--red); line-height: 1; text-align: right; }
+  .grade-years { font-family: var(--headline); font-size: 12px; letter-spacing: 0.08em; color: rgba(255,255,255,0.5); line-height: 1.8; }
+
+  /* ── Club officials / board section colors ──────────────────────────── */
+  .board-section h2 { color: var(--blue-deep); }
+  .board-section.alt h2 { color: var(--blue-deep); }
+  .board-section .lede { color: var(--charcoal); }
+
+  /* ── Awards ─────────────────────────────────────────────────────────── */
+  .awards-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .award-title { font-family: var(--display); font-size: 22px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 18px; }
+  .award-table { width: 100%; border-collapse: collapse; font-family: var(--body); font-size: 14px; background: var(--white); border-radius: 6px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+  .awards-section.alt .award-table { background: var(--cream); }
+  .award-table thead th { background: var(--blue-deep); color: var(--white); font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 10px 14px; text-align: left; }
+  .award-table tbody tr { border-bottom: 1px solid var(--line); }
+  .award-table tbody tr:hover { background: rgba(20,49,92,0.04); }
+  .award-table tbody td { padding: 8px 14px; color: var(--charcoal); }
+  .awards-section h2 { color: var(--blue-deep); }
+  .grade-tag { font-family: var(--headline); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--grey); }
+  .goals-count { font-family: var(--display); font-size: 15px; color: var(--red); font-weight: 700; }
+
+  /* ── Life Members ───────────────────────────────────────────────────── */
+  .life-members h2 { color: var(--blue-deep); }
+  .life-members .lede { color: var(--charcoal); }
+  .decades { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+  .decade { background: var(--white); padding: 24px 26px; border-radius: 6px; border-top: 3px solid var(--red); }
+  .decade h3 { font-family: var(--display); font-size: 24px; color: var(--red); text-transform: uppercase; margin: 0 0 16px; letter-spacing: 0.02em; }
+  .decade ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .decade li { display: flex; align-items: baseline; gap: 14px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .decade li:last-child { border-bottom: none; }
+  .decade .year { font-family: var(--display); font-size: 13px; color: var(--grey); width: 42px; flex-shrink: 0; }
+  .decade .name { font-family: var(--body); font-size: 15px; color: var(--charcoal); }
+
+  /* ── 150 Games Club ─────────────────────────────────────────────────── */
+  .games-club h2 { color: var(--blue-deep); }
+  .games-club .lede { color: var(--charcoal); }
+  .bands { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .band { background: var(--cream); padding: 28px; border-radius: 6px; border-left: 4px solid var(--red); }
+  .band h3 { font-family: var(--display); font-size: 22px; color: var(--blue-deep); text-transform: uppercase; margin: 0 0 18px; letter-spacing: 0.02em; }
+  .players { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .players li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 14px; background: var(--white); border-radius: 4px; }
+  .players .name { font-family: var(--display); font-size: 15px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; }
+  .players .games { font-family: var(--display); font-size: 18px; color: var(--red); letter-spacing: 0.02em; }
+  .players .games-lm { font-size: 12px; color: var(--grey); letter-spacing: 0.1em; }
+
+  /* ── Long-form text ─────────────────────────────────────────────────── */
+  .long-form h2 { color: var(--blue-deep); }
+  .long-form h3 { font-family: var(--display); font-size: clamp(20px, 2.5vw, 28px); color: var(--blue-deep); text-transform: uppercase; margin: 40px 0 16px; letter-spacing: 0.02em; }
+  .long-form p { margin-bottom: 18px; }
+  .long-form em { font-style: italic; color: var(--blue-deep); }
+  a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
+  .note { font-style: italic; color: var(--grey); font-size: 16px; padding: 20px 24px; background: var(--white); border-left: 3px solid var(--red); border-radius: 4px; margin-top: 32px; }
+
+  /* ── Responsive ─────────────────────────────────────────────────────── */
+  @media (max-width: 1024px) {
+    .awards-cols { grid-template-columns: 1fr; }
+    .bands { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 900px) {
+    .all-grades, .board-section, .awards-section, .life-members, .games-club, .long-form { padding: 56px 24px; }
+    .grade-card { grid-template-columns: 1fr; gap: 8px; }
+    .grade-count { font-size: 28px; text-align: left; }
+    .hb-table { font-size: 12px; }
+    .hb-table tbody td, .hb-table thead th { padding: 7px 10px; }
+    .decades { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 600px) {
+    .decades { grid-template-columns: 1fr; }
+  }
+</style>
