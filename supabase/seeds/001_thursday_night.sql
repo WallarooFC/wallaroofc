@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Seed: Thursday Night meals template (Facebook + landing takeover)
 -- =============================================================================
--- Sourced from the reference/thursday-night-flyer.png flyer.
+-- Sourced from the portal/reference/thursday-night-flyer.png flyer.
 -- Runs on top of migration 005_templates_and_takeovers.sql.
 --
 -- Two rows are inserted:
