@@ -10,9 +10,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: typecheck · lint · test · build
+  portal:
+    name: portal · typecheck · lint · test · build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portal
     env:
       SKIP_ENV_VALIDATION: "true"
     steps:
@@ -26,6 +29,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: portal/pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
 
@@ -33,3 +37,22 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+
+  public-site:
+    name: public · build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: public
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: public/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run build
