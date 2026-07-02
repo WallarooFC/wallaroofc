@@ -29,7 +29,6 @@ if (Astro.request.method === 'POST') {
       alt:           String(form.get('alt')     ?? '').trim(),
       caption:       String(form.get('caption') ?? '').trim(),
       round:         form.get('round')  ? parseInt(String(form.get('round')))  : null,
-      grade:         String(form.get('grade') ?? '').trim() || null,
       display_order: parseInt(String(form.get('display_order') ?? '0')) || 0,
     }).eq('id', id);
   }
@@ -43,8 +42,6 @@ const { data: photos } = await db
   .select('*')
   .order('display_order', { ascending: true })
   .order('created_at', { ascending: false });
-
-const GRADES = ['A-Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'U11', 'U9'];
 
 const supabaseUrl  = import.meta.env.PUBLIC_SUPABASE_URL  as string;
 const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
@@ -66,7 +63,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     /* Batch meta */
     .batch-meta { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
     .batch-meta-heading { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 14px; }
-    .batch-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .batch-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .field-group label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 5px; }
     .field-group select, .field-group input[type="number"], .field-group input[type="text"] { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 4px; padding: 8px 10px; font-size: 13px; }
 
@@ -153,13 +150,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           <input type="number" id="batch-round" min="1" max="25" placeholder="e.g. 7" />
         </div>
         <div class="field-group">
-          <label>Grade</label>
-          <select id="batch-grade">
-            <option value="">— none —</option>
-            {GRADES.map(g => <option value={g}>{g}</option>)}
-          </select>
-        </div>
-        <div class="field-group">
           <label>Season</label>
           <input type="number" id="batch-season" value="2026" min="2020" max="2040" />
         </div>
@@ -203,7 +193,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
               <span class={`pub-dot ${p.published ? 'on' : 'off'}`}></span>
               {p.published ? 'Published' : 'Hidden'}
               {p.round ? ` · R${p.round}` : ''}
-              {p.grade ? ` · ${p.grade}` : ''}
             </div>
             <div class="gc-actions">
               <button class="btn-sm" onclick={`openEdit(${JSON.stringify(p)})`}>Edit</button>
@@ -243,20 +232,11 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           </div>
           <div class="form-row">
             <label>Caption</label>
-            <textarea name="caption" id="modal-caption" placeholder="e.g. A-Grade · Round 7 · Wallaroo vs Kadina"></textarea>
+            <textarea name="caption" id="modal-caption" placeholder="e.g. Round 7 · Wallaroo vs Kadina"></textarea>
           </div>
-          <div class="form-grid-2">
-            <div class="form-row">
-              <label>Round</label>
-              <input type="number" name="round" id="modal-round" min="1" max="25" />
-            </div>
-            <div class="form-row">
-              <label>Grade</label>
-              <select name="grade" id="modal-grade">
-                <option value="">— none —</option>
-                {GRADES.map(g => <option value={g}>{g}</option>)}
-              </select>
-            </div>
+          <div class="form-row">
+            <label>Round</label>
+            <input type="number" name="round" id="modal-round" min="1" max="25" />
           </div>
           <div class="form-row">
             <label>Display order (lower = shown first)</label>
@@ -411,7 +391,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       if (!token) { showToast('Not signed in — please sign in again', 'error'); return; }
 
       const round  = (document.getElementById('batch-round')  as HTMLInputElement).value;
-      const grade  = (document.getElementById('batch-grade')  as HTMLSelectElement).value;
       const season = parseInt((document.getElementById('batch-season') as HTMLInputElement).value) || 2026;
 
       uploadBtn.disabled       = true;
@@ -429,7 +408,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           await insertRow({
             season,
             round:         round ? parseInt(round) : null,
-            grade:         grade || null,
             url,
             storage_path:  path,
             alt:           '',
@@ -457,7 +435,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       (document.getElementById('modal-alt')     as HTMLInputElement).value  = photo.alt     ?? '';
       (document.getElementById('modal-caption') as HTMLTextAreaElement).value = photo.caption ?? '';
       (document.getElementById('modal-round')   as HTMLInputElement).value  = photo.round   ?? '';
-      (document.getElementById('modal-grade')   as HTMLSelectElement).value = photo.grade   ?? '';
       (document.getElementById('modal-order')   as HTMLInputElement).value  = photo.display_order ?? '0';
       document.getElementById('edit-modal')!.classList.add('open');
     }

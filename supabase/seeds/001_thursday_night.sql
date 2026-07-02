@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Seed: Thursday Night meals template (Facebook + landing takeover)
 -- =============================================================================
--- Sourced from the portal/reference/thursday-night-flyer.png flyer.
+-- Sourced from the Thursday Night flyer (public/public/takeover/thursday-night.png).
 -- Runs on top of migration 005_templates_and_takeovers.sql.
 --
 -- Two rows are inserted:
@@ -48,6 +48,7 @@ values (
     'body',
     'Meals in the clubrooms tonight after training. Parmi $24 · Schnitzel $22 · Half schnitzel $12 · Nuggets & chips $10. Veggie bar available. Bar open, all welcome.',
     'ctaLabel', 'See the menu',
-    'ctaUrl', 'https://wallaroofc.com/thursday-night'
+    'ctaUrl', 'https://wallaroofc.com/thursday-night',
+    'imageUrl', 'https://wallaroofc.com/takeover/thursday-night.png'
   )
 );
