@@ -66,19 +66,21 @@ const useDb = !dbError && Array.isArray(dbPhotos) && dbPhotos.length > 0;
 const photos = useDb ? (dbPhotos as DbPhoto[]) : null;
 
 // ── Build round filter options ────────────────────────────────────────────────
-let rounds: string[];
+// Show EVERY round of the season (from the fixtures), so all rounds appear on
+// the gallery even before photos have been uploaded for them.
+const { data: fxRounds } = await supabase
+  .from('fixtures')
+  .select('round, season')
+  .not('round', 'is', null)
+  .order('season', { ascending: false });
+const roundSeason: number = (fxRounds ?? [])[0]?.season ?? 2026;
+const allRoundNums = [...new Set((fxRounds ?? [])
+  .filter((f: any) => f.season === roundSeason)
+  .map((f: any) => f.round as number))].sort((a, b) => a - b);
+const rounds = ['All', ...(allRoundNums.length ? allRoundNums : [1, 2, 3, 4, 5]).map(r => `R${r}`)];
 
-if (useDb && photos) {
-  const usedRoundNums = [...new Set(photos.filter(p => p.round != null).map(p => p.round as number))]
-    .sort((a, b) => a - b);
-  rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
-} else {
-  const usedRoundNums = [...new Set(staticPhotos.map(p => p.round as number))].sort((a, b) => a - b);
-  rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
-}
-
-// Season used for the per-round ZIP download links (real uploaded photos only).
-const season = useDb && photos && photos.length ? (photos[0].season ?? 2026) : 2026;
+// Season used for the per-round ZIP download links.
+const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? roundSeason) as number;
 ---
 <PageLayout
   title="Gallery · Wallaroo FC"
