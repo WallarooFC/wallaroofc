@@ -115,8 +115,8 @@ as $$
   select exists (
     select 1
       from public.profiles p
-     where p.user_id = auth.uid()
-       and p.role in ('secretary', 'president', 'treasurer', 'committee')
+     where p.id = auth.uid()
+       and p.role in ('admin', 'secretary', 'president', 'treasurer', 'committee')
   );
 $$;
 

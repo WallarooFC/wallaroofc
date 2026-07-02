@@ -5,7 +5,7 @@ import { env } from "@/env";
 
 type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
-const PUBLIC_PATH_PREFIXES = ["/sign-in", "/auth/"];
+const PUBLIC_PATH_PREFIXES = ["/sign-in", "/auth/", "/api/public/", "/widget.js"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
