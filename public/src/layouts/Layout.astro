@@ -125,9 +125,9 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
           "#" + ROOT_ID + " .wfc-cta:hover{background:#8E0B20;}" +
           "@keyframes wfc-rock{0%{transform:rotate(-45deg);}50%{transform:rotate(45deg);}100%{transform:rotate(-45deg);}}" +
           "@keyframes wfc-glow{0%,100%{box-shadow:0 20px 60px rgba(5,14,31,0.6);}50%{box-shadow:0 0 46px rgba(46,110,255,0.6),0 0 84px rgba(200,16,46,0.55),0 20px 60px rgba(5,14,31,0.6);}}" +
-          "#" + ROOT_ID + " .wfc-spin{animation:wfc-rock 6s ease-in-out infinite;transform-origin:center;}" +
+          "#" + ROOT_ID + " .wfc-spin{animation:wfc-rock 12s ease-in-out infinite;transform-origin:center;}" +
           "#" + ROOT_ID + " .wfc-glam{animation:wfc-glow 2.6s ease-in-out infinite;}" +
-          "#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-rock 6s ease-in-out infinite,wfc-glow 2.6s ease-in-out infinite;}" +
+          "#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-rock 12s ease-in-out infinite,wfc-glow 2.6s ease-in-out infinite;}" +
           "@media(prefers-reduced-motion:reduce){#" + ROOT_ID + " .wfc-spin{animation:none;}#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-glow 2.6s ease-in-out infinite;}}";
         var s = document.createElement("style");
         s.id = STYLE_ID;
