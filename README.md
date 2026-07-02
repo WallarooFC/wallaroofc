@@ -1,42 +1,14 @@
-# Wallaroo FC — monorepo
+# Wallaroo FC — website
 
-| App | Path | Stack | URL |
-|-----|------|-------|-----|
-| Public website | `public/` | Astro 6 · Supabase · Vercel | wallaroofc.com |
-| Secretary portal | `portal/` | Next.js 15 · Supabase · Vercel | portal.wallaroofc.com |
+Astro 6 SSR site for **wallaroofc.com** — club homepage, fixtures, results, ladders, sponsors, gallery, plus the password-protected **admin** section at `/admin`.
 
-Both apps share the same Supabase project (`linaudktxwrqelngffol`). Migrations live in `supabase/migrations/`.
+| Path | Stack | URL |
+|------|-------|-----|
+| `public/` | Astro 6 · Supabase · Vercel | wallaroofc.com |
 
----
+The site (and its `/admin` area) is backed by Supabase project `linaudktxwrqelngffol`. Migrations live in `supabase/migrations/`.
 
-## Secretary portal (`portal/`)
-
-Production portal for the Wallaroo Football Club Secretary. The portal replaces a sprawl of spreadsheets, manual PlayHQ-email-to-jumper workflows, and ad-hoc roster wrangling.
-
-### Portal stack
-
-- Next.js 15 (App Router, React Server Components, TypeScript strict)
-- Tailwind CSS v4 + shadcn/ui
-- Supabase (Postgres + Auth + Storage) with RLS on every table
-- Resend for email, Twilio for SMS (feature-flagged via `SMS_ENABLED`)
-- Vercel for hosting + cron
-- Vitest + React Testing Library for unit tests; Playwright for E2E
-- pnpm
-
-### Getting started
-
-```bash
-cd portal
-pnpm install
-cp .env.local.example .env.local   # fill in real values
-pnpm dev
-```
-
-Visit http://localhost:3000.
-
-## Public website (`public/`)
-
-Astro 6 SSR site for wallaroofc.com — club homepage, fixtures, results, ladders, sponsors, admin portal.
+## Getting started
 
 ```bash
 cd public
@@ -47,48 +19,14 @@ npm run dev
 
 Visit http://localhost:4321.
 
-## Scripts
+## Admin
 
-| Command           | Purpose                            |
-| ----------------- | ---------------------------------- |
-| `pnpm dev`        | Next.js dev server                 |
-| `pnpm build`      | Production build                   |
-| `pnpm typecheck`  | `tsc --noEmit`                     |
-| `pnpm lint`       | ESLint                             |
-| `pnpm test`       | Vitest unit tests                  |
-| `pnpm test:watch` | Vitest in watch mode               |
-| `pnpm test:e2e`   | Playwright E2E (starts dev server) |
-| `pnpm format`     | Prettier write                     |
+The admin area lives inside the site at `/admin` (login at `/admin/login`, Supabase Auth). Pages: dashboard, players, fixtures, results, ladders, sponsors, roster, canteen, config, gallery, members, news, qualifications, secretary.
 
-## Layout
+## Deploy
 
-```
-/reference            Brief, mockups, seed data (immutable inputs)
-/src
-  /app                App Router routes (route groups arrive in commit 2)
-  /lib
-    /supabase         Server / browser / service-role client factories
-    utils.ts          cn() helper
-  env.ts              t3-env schema — app refuses to boot without required vars
-/e2e                  Playwright specs
-/.github/workflows    CI
-```
+Hosted on Vercel (project `wallaroo-fc`, root directory `public/`). Pushes to `main` auto-deploy to production (wallaroofc.com + www.wallaroofc.com).
 
-## Environment
+## Data
 
-All env vars live in `.env.local` and are validated by `src/env.ts` (`@t3-oss/env-nextjs`). See `.env.local.example` for the schema. The app refuses to start if a required var is missing; set `SKIP_ENV_VALIDATION=true` only for `pnpm build` in CI.
-
-## Brand
-
-Tokens are defined in `src/app/globals.css` under `@theme` and exposed as Tailwind utilities (`bg-wfc-red`, `text-wfc-cream`, etc.). Source of truth for the brand system is in `reference/`.
-
-| Token                                                      | Hex                               | Usage                                       |
-| ---------------------------------------------------------- | --------------------------------- | ------------------------------------------- |
-| `wfc-red`                                                  | `#C8102E`                         | Primary accent — CTAs only                  |
-| `wfc-red-deep`                                             | `#8E0B20`                         | Button hover                                |
-| `wfc-blue` / `wfc-blue-deep` / `wfc-blue-darkest`          | `#14315C` / `#0A1F3D` / `#050E1F` | Headers, hero gradient                      |
-| `wfc-cream`                                                | `#F5F1E8`                         | Page background                             |
-| `wfc-charcoal`                                             | `#15171C`                         | Body text                                   |
-| `wfc-grey`                                                 | `#595D63`                         | Muted text (WCAG AA)                        |
-| `wfc-line`                                                 | `#DAD3C2`                         | Dividers                                    |
-| `wfc-status-green` / `wfc-status-amber` / `wfc-status-red` | `#3D7A3A` / `#C47B1F` / `#A8252B` | Status chips only — distinct from brand red |
+Live fixture/ladder/results data syncs from the PlayHQ public GraphQL API (Wallaroo org `55ab4e41-1c1e-411f-99a4-d9255f2c87a5`) into Supabase via scheduled endpoints under `public/src/pages/api/sync/`.
