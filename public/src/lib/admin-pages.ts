@@ -11,6 +11,7 @@ export const ADMIN_PAGES = [
   { key: 'canteen',        label: 'Canteen Roster',       icon: '🥘' },
   { key: 'sponsors',       label: 'Sponsors',             icon: '🤝' },
   { key: 'news',           label: 'News',                 icon: '📰' },
+  { key: 'takeovers',      label: 'Announcements',        icon: '📣' },
   { key: 'gallery',        label: 'Gallery',              icon: '🖼' },
   { key: 'config',         label: 'Site Settings',        icon: '⚙' },
   { key: 'secretary',      label: 'Secretary Tools',      icon: '📁' },
