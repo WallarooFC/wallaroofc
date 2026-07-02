@@ -44,6 +44,19 @@ jobs:
     defaults:
       run:
         working-directory: public
+    # Publish secrets at the job level so their emptiness can be tested in
+    # step-level `if:` expressions via the `env` context. The Astro build
+    # needs at minimum PUBLIC_SUPABASE_URL + PUBLIC_SUPABASE_ANON_KEY to
+    # prerender pages that hit Supabase; PlayHQ + service-role are only
+    # needed by specific routes but are exposed here so future pages that
+    # use them build cleanly once the secrets are wired up.
+    env:
+      PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+      PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PLAYHQ_ORG_ID: ${{ secrets.PLAYHQ_ORG_ID }}
+      PLAYHQ_COMPETITION_ID: ${{ secrets.PLAYHQ_COMPETITION_ID }}
+      PLAYHQ_API_KEY: ${{ secrets.PLAYHQ_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,4 +68,11 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - name: Build Astro site
+        if: ${{ env.PUBLIC_SUPABASE_URL != '' && env.PUBLIC_SUPABASE_ANON_KEY != '' }}
+        run: npm run build
+
+      - name: Note skipped build (missing Supabase secrets)
+        if: ${{ env.PUBLIC_SUPABASE_URL == '' || env.PUBLIC_SUPABASE_ANON_KEY == '' }}
+        run: |
+          echo "::warning::Astro build skipped — set PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY as GitHub Actions secrets to enable it."
