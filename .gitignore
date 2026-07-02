@@ -9,19 +9,8 @@
 .vscode/
 .idea/
 
-# Monorepo node_modules (each app has its own)
+# node
 node_modules/
-
-# portal/ (Next.js)
-portal/node_modules/
-portal/.next/
-portal/out/
-portal/build/
-portal/coverage/
-portal/playwright-report/
-portal/test-results/
-portal/.pnp
-portal/.pnp.*
 
 # public/ (Astro)
 public/node_modules/
