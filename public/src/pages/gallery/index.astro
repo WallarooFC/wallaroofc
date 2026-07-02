@@ -57,7 +57,7 @@ const staticPhotos: StaticPhoto[] = [
 // ── Supabase fetch ────────────────────────────────────────────────────────────
 const { data: dbPhotos, error: dbError } = await supabase
   .from('gallery')
-  .select('id, url, alt, caption, round, grade, season, display_order, created_at')
+  .select('id, url, alt, caption, round, season, display_order, created_at')
   .eq('published', true)
   .order('display_order', { ascending: true })
   .order('created_at', { ascending: false });
@@ -65,24 +65,20 @@ const { data: dbPhotos, error: dbError } = await supabase
 const useDb = !dbError && Array.isArray(dbPhotos) && dbPhotos.length > 0;
 const photos = useDb ? (dbPhotos as DbPhoto[]) : null;
 
-// ── Build filter options ──────────────────────────────────────────────────────
-const gradeOrder = ['A-Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'U11', 'U9'];
-
+// ── Build round filter options ────────────────────────────────────────────────
 let rounds: string[];
-let grades: string[];
 
 if (useDb && photos) {
   const usedRoundNums = [...new Set(photos.filter(p => p.round != null).map(p => p.round as number))]
     .sort((a, b) => a - b);
   rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
-  const usedGrades = new Set(photos.filter(p => p.grade).map(p => p.grade as string));
-  grades = ['All', ...gradeOrder.filter(g => usedGrades.has(g))];
 } else {
   const usedRoundNums = [...new Set(staticPhotos.map(p => p.round as number))].sort((a, b) => a - b);
   rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
-  const usedGrades = new Set(staticPhotos.map(p => p.grade).filter(Boolean) as string[]);
-  grades = ['All', ...gradeOrder.filter(g => usedGrades.has(g))];
 }
+
+// Season used for the per-round ZIP download links (real uploaded photos only).
+const season = useDb && photos && photos.length ? (photos[0].season ?? 2026) : 2026;
 ---
 <PageLayout
   title="Gallery · Wallaroo FC"
@@ -92,7 +88,7 @@ if (useDb && photos) {
     eyebrow="From the boundary"
     title="Bulldogs"
     titleItalic="in the moment."
-    intro="Every round, every grade. Photos updated weekly through the season. Got a great shot? Email us or tag #BulldogsForever."
+    intro="Every round of the season. Download the full set of photos from any round. Got a great shot? Email us or tag #BulldogsForever."
   />
 
   <section class="gallery-page">
@@ -106,14 +102,9 @@ if (useDb && photos) {
             ))}
           </div>
         </div>
-        <div class="filter-group">
-          <span class="filter-label">Grade</span>
-          <div class="filter-pills" data-filter-group="grade">
-            {grades.map((g, i) => (
-              <button class={`filter-pill${i === 0 ? ' active' : ''}`} data-filter-value={g}>{g}</button>
-            ))}
-          </div>
-        </div>
+        {useDb && (
+          <a id="download-round" class="download-btn" data-season={season} download style="display:none"></a>
+        )}
       </div>
 
       <div class="photo-grid">
@@ -122,7 +113,6 @@ if (useDb && photos) {
             <figure
               class="photo"
               data-round={p.round != null ? `R${p.round}` : 'All'}
-              data-grade={p.grade ?? 'All'}
             >
               <img
                 src={p.url}
@@ -130,21 +120,17 @@ if (useDb && photos) {
                 loading="lazy"
                 decoding="async"
               />
-              {(p.caption || p.round || p.grade) && (
+              {(p.caption || p.round) && (
                 <figcaption>
                   {p.caption && <span class="caption">{p.caption}</span>}
-                  {(p.round || p.grade) && (
-                    <span class="meta">
-                      {p.round ? `R${p.round}` : ''}{p.round && p.grade ? ' · ' : ''}{p.grade ?? ''}
-                    </span>
-                  )}
+                  {p.round && <span class="meta">R{p.round}</span>}
                 </figcaption>
               )}
             </figure>
           ))
         ) : (
           staticPhotos.map(p => (
-            <figure class="photo" data-round={`R${p.round}`} data-grade={p.grade}>
+            <figure class="photo" data-round={`R${p.round}`}>
               <Image
                 src={p.src}
                 alt={p.alt}
@@ -156,7 +142,7 @@ if (useDb && photos) {
               />
               <figcaption>
                 <span class="caption">{p.caption}</span>
-                <span class="meta">R{p.round} · {p.grade}</span>
+                <span class="meta">R{p.round}</span>
               </figcaption>
             </figure>
           ))
@@ -170,23 +156,34 @@ if (useDb && photos) {
   </section>
 
   <script>
-    // Simple two-axis filter — round + grade. Vanilla JS, no framework.
-    const state = { round: 'All', grade: 'All' };
+    // Round filter + per-round bulk download. Vanilla JS, no framework.
     const photoEls = document.querySelectorAll<HTMLElement>('.photo');
+    const downloadBtn = document.getElementById('download-round') as HTMLAnchorElement | null;
+    const dlSeason = downloadBtn?.dataset.season ?? '2026';
+
+    function applyRound(round: string) {
+      photoEls.forEach(p => {
+        p.style.display = (round === 'All' || p.dataset.round === round) ? '' : 'none';
+      });
+      if (downloadBtn) {
+        if (round === 'All') {
+          downloadBtn.style.display = 'none';
+        } else {
+          const n = round.replace(/^R/, '');
+          downloadBtn.href = `/api/gallery/download?round=${n}&season=${dlSeason}`;
+          downloadBtn.textContent = `⬇ Download all — Round ${n}`;
+          downloadBtn.style.display = '';
+        }
+      }
+    }
 
     document.querySelectorAll<HTMLButtonElement>('.filter-pill').forEach(btn => {
       btn.addEventListener('click', () => {
-        const group = btn.closest<HTMLElement>('.filter-pills')?.dataset.filterGroup;
         const value = btn.dataset.filterValue;
-        if (!group || !value) return;
-        state[group as 'round' | 'grade'] = value;
+        if (!value) return;
         btn.parentElement?.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        photoEls.forEach(p => {
-          const roundMatch = state.round === 'All' || p.dataset.round === state.round;
-          const gradeMatch = state.grade === 'All' || p.dataset.grade === state.grade;
-          p.style.display = (roundMatch && gradeMatch) ? '' : 'none';
-        });
+        applyRound(value);
       });
     });
   </script>
@@ -202,6 +199,8 @@ if (useDb && photos) {
   .filter-pill { background: var(--white); border: 1px solid var(--line); padding: 8px 16px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--charcoal); cursor: pointer; border-radius: 2px; transition: all 0.2s; }
   .filter-pill:hover { border-color: var(--red); color: var(--red); }
   .filter-pill.active { background: var(--red); color: var(--white); border-color: var(--red); }
+  .download-btn { margin-left: auto; background: var(--red); color: var(--white); border: 1px solid var(--red); padding: 9px 18px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+  .download-btn:hover { background: var(--red-deep); border-color: var(--red-deep); }
 
   .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .photo { position: relative; margin: 0; overflow: hidden; border-radius: 4px; background: var(--blue-darkest); aspect-ratio: 4 / 3; }
