@@ -189,6 +189,8 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
       }
 
       function boot() {
+        // Landing page only — the takeover is a home-page announcement.
+        if (location.pathname !== "/") return;
         fetch(API_URL, { cache: "no-store", credentials: "omit" })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (payload) {
