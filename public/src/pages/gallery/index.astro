@@ -1,0 +1,222 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { supabase } from '../../lib/supabase';
+
+// ── Static fallback photos ────────────────────────────────────────────────────
+import wallarooOval      from '../../assets/photos/wallaroo-oval-home-crowd.jpg';
+import u11Contest        from '../../assets/photos/u11-contest-vs-yorketown.jpg';
+import inThePack         from '../../assets/photos/in-the-pack.jpg';
+import midfieldBattle    from '../../assets/photos/midfield-battle.jpg';
+import onTheRun          from '../../assets/photos/on-the-run.jpg';
+import firstToTheFooty   from '../../assets/photos/first-to-the-footy.jpg';
+import bulldogsVsCrows   from '../../assets/photos/bulldogs-vs-crows.jpg';
+import matchDayRunner    from '../../assets/photos/match-day-runner.jpg';
+import bulldogsInContest from '../../assets/photos/bulldogs-in-the-contest.jpg';
+import quickHands        from '../../assets/photos/quick-hands.jpg';
+import openFieldRunning  from '../../assets/photos/open-field-running.jpg';
+
+interface StaticPhoto {
+  src: ImageMetadata;
+  alt: string;
+  caption: string;
+  round?: number;
+  grade?: string;
+}
+
+interface DbPhoto {
+  id: string;
+  url: string;
+  storage_path: string;
+  alt: string;
+  caption: string;
+  round: number | null;
+  grade: string | null;
+  season: number;
+  display_order: number;
+  published: boolean;
+  created_at: string;
+}
+
+const staticPhotos: StaticPhoto[] = [
+  { src: wallarooOval,       alt: 'Wallaroo Oval home crowd',                caption: 'Wallaroo Oval · home crowd', round: 5, grade: 'A-Grade'      },
+  { src: u11Contest,         alt: 'U11 contest against Yorketown',           caption: 'U11 contest · vs Yorketown', round: 4, grade: 'U11'           },
+  { src: inThePack,          alt: 'Players in the pack contesting the ball', caption: 'In the pack',                round: 5, grade: 'A-Grade'      },
+  { src: midfieldBattle,     alt: 'Midfield battle for possession',          caption: 'Midfield battle',            round: 5, grade: 'A-Grade'      },
+  { src: onTheRun,           alt: 'Bulldogs player on the run',              caption: 'On the run',                 round: 5, grade: 'A-Grade'      },
+  { src: firstToTheFooty,    alt: 'First to the footy contest',              caption: 'First to the footy',         round: 3, grade: 'B Grade'      },
+  { src: bulldogsVsCrows,    alt: 'Bulldogs vs CMS Crows',                   caption: 'Bulldogs vs Crows',          round: 1, grade: 'A-Grade'      },
+  { src: matchDayRunner,     alt: 'Match-day runner',                        caption: 'Match-day runner',           round: 5, grade: 'A-Grade'      },
+  { src: bulldogsInContest,  alt: 'Bulldogs in the contest',                 caption: 'Bulldogs in the contest',    round: 4, grade: 'A-Grade'      },
+  { src: quickHands,         alt: 'Quick hands disposing of the ball',       caption: 'Quick hands',                round: 3, grade: 'Senior Colts' },
+  { src: openFieldRunning,   alt: 'Open field running with the ball',        caption: 'Open field running',         round: 5, grade: 'B Grade'      },
+];
+
+// ── Supabase fetch ────────────────────────────────────────────────────────────
+const { data: dbPhotos, error: dbError } = await supabase
+  .from('gallery')
+  .select('id, url, alt, caption, round, grade, season, display_order, created_at')
+  .eq('published', true)
+  .order('display_order', { ascending: true })
+  .order('created_at', { ascending: false });
+
+const useDb = !dbError && Array.isArray(dbPhotos) && dbPhotos.length > 0;
+const photos = useDb ? (dbPhotos as DbPhoto[]) : null;
+
+// ── Build filter options ──────────────────────────────────────────────────────
+const gradeOrder = ['A-Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'U11', 'U9'];
+
+let rounds: string[];
+let grades: string[];
+
+if (useDb && photos) {
+  const usedRoundNums = [...new Set(photos.filter(p => p.round != null).map(p => p.round as number))]
+    .sort((a, b) => a - b);
+  rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
+  const usedGrades = new Set(photos.filter(p => p.grade).map(p => p.grade as string));
+  grades = ['All', ...gradeOrder.filter(g => usedGrades.has(g))];
+} else {
+  const usedRoundNums = [...new Set(staticPhotos.map(p => p.round as number))].sort((a, b) => a - b);
+  rounds = ['All', ...usedRoundNums.map(r => `R${r}`)];
+  const usedGrades = new Set(staticPhotos.map(p => p.grade).filter(Boolean) as string[]);
+  grades = ['All', ...gradeOrder.filter(g => usedGrades.has(g))];
+}
+---
+<PageLayout
+  title="Gallery · Wallaroo FC"
+  description="Match-day photos from the YPFL 2026 season — Wallaroo Bulldogs on the boundary, in the contest, and lifting the trophy."
+>
+  <PageHero
+    eyebrow="From the boundary"
+    title="Bulldogs"
+    titleItalic="in the moment."
+    intro="Every round, every grade. Photos updated weekly through the season. Got a great shot? Email us or tag #BulldogsForever."
+  />
+
+  <section class="gallery-page">
+    <div class="container">
+      <div class="filters">
+        <div class="filter-group">
+          <span class="filter-label">Round</span>
+          <div class="filter-pills" data-filter-group="round">
+            {rounds.map((r, i) => (
+              <button class={`filter-pill${i === 0 ? ' active' : ''}`} data-filter-value={r}>{r}</button>
+            ))}
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Grade</span>
+          <div class="filter-pills" data-filter-group="grade">
+            {grades.map((g, i) => (
+              <button class={`filter-pill${i === 0 ? ' active' : ''}`} data-filter-value={g}>{g}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div class="photo-grid">
+        {useDb && photos ? (
+          photos.map(p => (
+            <figure
+              class="photo"
+              data-round={p.round != null ? `R${p.round}` : 'All'}
+              data-grade={p.grade ?? 'All'}
+            >
+              <img
+                src={p.url}
+                alt={p.alt}
+                loading="lazy"
+                decoding="async"
+              />
+              {(p.caption || p.round || p.grade) && (
+                <figcaption>
+                  {p.caption && <span class="caption">{p.caption}</span>}
+                  {(p.round || p.grade) && (
+                    <span class="meta">
+                      {p.round ? `R${p.round}` : ''}{p.round && p.grade ? ' · ' : ''}{p.grade ?? ''}
+                    </span>
+                  )}
+                </figcaption>
+              )}
+            </figure>
+          ))
+        ) : (
+          staticPhotos.map(p => (
+            <figure class="photo" data-round={`R${p.round}`} data-grade={p.grade}>
+              <Image
+                src={p.src}
+                alt={p.alt}
+                widths={[320, 640, 960, 1280]}
+                sizes="(max-width: 700px) 90vw, (max-width: 1100px) 45vw, 30vw"
+                loading="lazy"
+                decoding="async"
+                format="webp"
+              />
+              <figcaption>
+                <span class="caption">{p.caption}</span>
+                <span class="meta">R{p.round} · {p.grade}</span>
+              </figcaption>
+            </figure>
+          ))
+        )}
+      </div>
+
+      <div class="cta">
+        <p>More photos uploaded weekly. Got a great shot? Email it to <a href="mailto:admin@wallaroofc.com.au?subject=Gallery%20photo">admin@wallaroofc.com.au</a> or tag <strong>#BulldogsForever</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Simple two-axis filter — round + grade. Vanilla JS, no framework.
+    const state = { round: 'All', grade: 'All' };
+    const photoEls = document.querySelectorAll<HTMLElement>('.photo');
+
+    document.querySelectorAll<HTMLButtonElement>('.filter-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.closest<HTMLElement>('.filter-pills')?.dataset.filterGroup;
+        const value = btn.dataset.filterValue;
+        if (!group || !value) return;
+        state[group as 'round' | 'grade'] = value;
+        btn.parentElement?.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        photoEls.forEach(p => {
+          const roundMatch = state.round === 'All' || p.dataset.round === state.round;
+          const gradeMatch = state.grade === 'All' || p.dataset.grade === state.grade;
+          p.style.display = (roundMatch && gradeMatch) ? '' : 'none';
+        });
+      });
+    });
+  </script>
+</PageLayout>
+
+<style>
+  .gallery-page { background: var(--cream); padding: 64px 32px 120px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .filters { display: flex; gap: 40px; margin-bottom: 40px; flex-wrap: wrap; align-items: center; }
+  .filter-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .filter-label { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); }
+  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-pill { background: var(--white); border: 1px solid var(--line); padding: 8px 16px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--charcoal); cursor: pointer; border-radius: 2px; transition: all 0.2s; }
+  .filter-pill:hover { border-color: var(--red); color: var(--red); }
+  .filter-pill.active { background: var(--red); color: var(--white); border-color: var(--red); }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .photo { position: relative; margin: 0; overflow: hidden; border-radius: 4px; background: var(--blue-darkest); aspect-ratio: 4 / 3; }
+  .photo img,
+  .photo :global(img) { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+  .photo:hover img,
+  .photo:hover :global(img) { transform: scale(1.06); }
+  .photo figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 16px; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%); color: var(--white); opacity: 0; transition: opacity 0.3s; }
+  .photo:hover figcaption { opacity: 1; }
+  .photo .caption { display: block; font-family: var(--display); font-size: 16px; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 4px; }
+  .photo .meta { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; color: rgba(255,255,255,0.7); text-transform: uppercase; }
+
+  .cta { margin-top: 56px; text-align: center; font-family: var(--serif); font-size: 17px; color: var(--grey); }
+  .cta a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
+
+  @media (max-width: 900px) { .photo-grid { grid-template-columns: repeat(2, 1fr); } .gallery-page { padding: 48px 24px; } }
+  @media (max-width: 500px) { .photo-grid { grid-template-columns: 1fr; } }
+</style>

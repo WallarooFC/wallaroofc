@@ -1,0 +1,89 @@
+---
+interface Card {
+  icon: string;
+  title: string;
+  body: string;
+  detail: string;
+  href?: string;
+}
+
+const cards: Card[] = [
+  { icon: '⏱', title: 'Gates Open', body: 'Junior matches kick off from 9am.\nA-Grade bounce 2:40pm.', detail: 'Saturdays, April–August' },
+  { icon: '🅿', title: 'Parking & Entry', body: 'Free parking within the grounds. Gate entrance fee applies on match day.', detail: 'Easy access · Plenty of space' },
+  { icon: '🍔', title: 'Canteen', body: 'Chicken burgers, hot chips, nuggets, pies, pasties, sausage rolls, hot dogs, fresh rolls and sushi. Drinks and lollies too.', detail: 'Run by club volunteers', href: '/canteen/' },
+  { icon: '♿', title: 'Accessibility', body: 'Ground-level access throughout. Accessible toilets in the clubrooms and on the end of the canteen building.', detail: 'Contact us for assistance' },
+  { icon: '🐕', title: 'Dogs Welcome', body: 'Well-behaved dogs on lead are welcome on the boundary.', detail: 'Dogs of Bulldogs supporters' },
+  { icon: '🎯', title: 'After the Siren', body: 'Clubrooms open post-match. Meals, licensed bar, club activities and presentations.', detail: 'Club bats each home game' },
+];
+---
+<section class="gameday-info" aria-labelledby="gameday-heading">
+  <div class="gd-inner">
+    <div class="gd-grid">
+      <div class="gd-text reveal">
+        <div class="section-eyebrow">Visiting Wallaroo Oval</div>
+        <h2 id="gameday-heading">Game day,<span class="ital">made simple.</span></h2>
+        <p>Whether it's your first time at Wallaroo Oval or your fiftieth, here's what you need to know about a Bulldogs home Saturday on Cornish Terrace.</p>
+        <p class="emphasis">Gate entrance fee applies · Family-friendly · All welcome</p>
+        <div class="smoke-notice">
+          <span class="smoke-icon" aria-hidden="true">🚭</span>
+          <div>
+            <strong>Smoke-free &amp; vape-free</strong>
+            <p>We're a family club. Please keep cigarettes and vapes 10 metres clear of the oval, clubrooms, canteen and toilets — whether it's a junior or senior game day.</p>
+            <p>Thanks for helping us keep the boundary clean for everyone.</p>
+          </div>
+        </div>
+      </div>
+      <div class="gd-cards reveal reveal-delay-1">
+        {cards.map(c => (
+          c.href
+            ? <a href={c.href} class="gd-card gd-card--link">
+                <div class="icon" aria-hidden="true">{c.icon}</div>
+                <h3>{c.title}</h3>
+                <p>{c.body}</p>
+                <div class="detail">{c.detail} <span class="card-link-cue">→ Sign up</span></div>
+              </a>
+            : <div class="gd-card">
+                <div class="icon" aria-hidden="true">{c.icon}</div>
+                <h3>{c.title}</h3>
+                <p style="white-space: pre-line">{c.body}</p>
+                <div class="detail">{c.detail}</div>
+              </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .gameday-info { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .gd-inner { max-width: 1400px; margin: 0 auto; }
+  .gd-grid { display: grid; grid-template-columns: 1.2fr 2fr; gap: 56px; align-items: start; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .gd-text h2 { font-family: var(--display); font-size: clamp(48px, 6vw, 80px); line-height: 0.92; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 24px; }
+  .gd-text h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; display: block; }
+  .gd-text p { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--grey); margin-bottom: 24px; }
+  .gd-text p.emphasis { font-family: var(--headline); font-size: 13px; letter-spacing: 0.14em; color: var(--red); text-transform: uppercase; font-style: normal; }
+  .smoke-notice { display: flex; gap: 14px; align-items: flex-start; margin-top: 32px; background: var(--cream); border: 1px solid var(--line); border-left: 3px solid var(--charcoal); border-radius: 4px; padding: 20px; }
+  .smoke-icon { font-size: 26px; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+  .smoke-notice strong { font-family: var(--headline); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--charcoal); display: block; margin-bottom: 8px; }
+  .smoke-notice p { font-family: var(--body); font-size: 13px; line-height: 1.55; color: var(--grey); margin-bottom: 6px; }
+  .smoke-notice p:last-child { margin-bottom: 0; }
+  .gd-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .gd-card { background: var(--cream); border: 1px solid var(--line); border-left: 3px solid var(--red); border-radius: 4px; padding: 24px; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .gd-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+  .gd-card--link { cursor: pointer; text-decoration: none; color: inherit; }
+  .gd-card--link:hover { background: #f0e8e8; border-left-color: var(--red); }
+  .card-link-cue { color: var(--red); font-weight: 600; margin-left: 4px; }
+  .gd-card .icon { font-family: var(--display); font-size: 22px; color: var(--red); margin-bottom: 8px; letter-spacing: 0.04em; }
+  .gd-card h3 { font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue-deep); margin-bottom: 8px; }
+  .gd-card p { font-family: var(--body); font-size: 14px; line-height: 1.5; color: var(--charcoal); margin-bottom: 0; }
+  .gd-card .detail { font-family: var(--headline); font-size: 13px; letter-spacing: 0.1em; color: var(--grey); margin-top: 8px; text-transform: uppercase; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+
+  @media (max-width: 1100px) { .gd-grid { grid-template-columns: 1fr; gap: 48px; } }
+  @media (max-width: 700px) { .gd-cards { grid-template-columns: 1fr; } }
+</style>

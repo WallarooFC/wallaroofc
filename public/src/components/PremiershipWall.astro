@@ -1,0 +1,88 @@
+---
+interface Props {
+  /** Years to highlight as flags. Real A-Grade premiership years from the club's official history records. */
+  flagYears?: number[];
+  startYear?: number;
+  endYear?: number;
+  totalFlags?: number;
+  seniorColtsFlags?: number;
+  firstFlagYear?: number;
+  mostRecentFlagYear?: number;
+}
+
+const {
+  flagYears = [
+    1889, 1892, 1896, 1897, 1899, 1900, 1902, 1905,
+    1913, 1914, 1919, 1920, 1925, 1927,
+    1945, 1950, 1952, 1953, 1954,
+    1976, 1983, 1990, 1992, 1996, 1997, 1998, 2000,
+  ],
+  startYear = 1889,
+  endYear = 2026,
+  totalFlags = 27,
+  seniorColtsFlags = 5,
+  firstFlagYear = 1889,
+  mostRecentFlagYear = 2000,
+} = Astro.props;
+
+const years: number[] = [];
+for (let y = startYear; y <= endYear; y++) years.push(y);
+const flagSet = new Set(flagYears);
+---
+<section class="premiership-wall" aria-labelledby="pw-heading">
+  <div class="pw-inner">
+    <div class="pw-header reveal">
+      <div class="section-eyebrow centered">The Trophy Cabinet</div>
+      <h2 id="pw-heading">{totalFlags} flags. <span class="ital">{endYear - startYear + 1} years.</span></h2>
+      <p>From {firstFlagYear} to {mostRecentFlagYear}, the Bulldogs lifted the A-Grade premiership cup {totalFlags === 27 ? 'twenty-seven' : totalFlags} times. Every year red, every year a flag, every year a story still told at the clubrooms.</p>
+    </div>
+
+    <div class="pw-grid reveal reveal-delay-1" role="list">
+      {years.map(y => (
+        <div
+          class={flagSet.has(y) ? 'pw-year flag' : 'pw-year'}
+          role="listitem"
+          title={flagSet.has(y) ? `${y} — Premiership` : `${y}`}
+        >{y}</div>
+      ))}
+    </div>
+
+    <div class="pw-summary reveal reveal-delay-2">
+      <div class="pw-stat"><div class="num">{totalFlags}</div><div class="label">A-Grade Flags</div></div>
+      <div class="pw-stat"><div class="num">{seniorColtsFlags}</div><div class="label">Senior Colts (since 2014)</div></div>
+      <div class="pw-stat"><div class="num">{firstFlagYear}</div><div class="label">First Flag</div></div>
+      <div class="pw-stat"><div class="num">{mostRecentFlagYear}</div><div class="label">Most Recent</div></div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .premiership-wall { background: var(--blue-darkest); color: var(--white); padding: 120px 32px; position: relative; overflow: hidden; border-top: 6px solid var(--red); }
+  .premiership-wall::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 20% 30%, rgba(200,16,46,0.15) 0%, transparent 60%); }
+  .pw-inner { max-width: 1400px; margin: 0 auto; position: relative; z-index: 2; }
+  .pw-header { text-align: center; margin-bottom: 56px; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .section-eyebrow.centered { justify-content: center; }
+  .pw-header h2 { font-family: var(--display); font-size: clamp(56px, 7vw, 96px); line-height: 0.92; text-transform: uppercase; margin-bottom: 16px; }
+  .pw-header h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+  .pw-header p { font-family: var(--serif); font-style: italic; font-size: 19px; color: rgba(255,255,255,0.7); max-width: 640px; margin: 0 auto; }
+  .pw-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 8px; margin-bottom: 32px; }
+  .pw-year { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; font-family: var(--display); font-size: 14px; letter-spacing: 0.02em; color: rgba(255,255,255,0.4); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); position: relative; }
+  .pw-year.flag { background: var(--red); color: var(--white); border-color: var(--red); font-weight: 700; box-shadow: 0 4px 12px rgba(200,16,46,0.3); }
+  .pw-year.flag::before { content: '★'; position: absolute; top: 4px; right: 6px; font-family: var(--body); font-size: 9px; color: rgba(255,255,255,0.6); }
+  .pw-year:hover { transform: scale(1.08); z-index: 2; }
+  .pw-year.flag:hover { background: var(--red-deep); }
+  .pw-summary { display: flex; justify-content: center; gap: 64px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1); flex-wrap: wrap; }
+  .pw-stat { text-align: center; }
+  .pw-stat .num { font-family: var(--display); font-size: 64px; line-height: 1; color: var(--red); margin-bottom: 8px; }
+  .pw-stat .label { font-family: var(--headline); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.7); }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+
+  @media (max-width: 1100px) { .pw-grid { grid-template-columns: repeat(8, 1fr); } }
+  @media (max-width: 700px) { .pw-grid { grid-template-columns: repeat(6, 1fr); } .premiership-wall { padding: 80px 24px; } }
+</style>

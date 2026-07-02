@@ -1,0 +1,17 @@
+# Site-wide weekly state. Edit this every Monday after a round
+# (or whenever the round number changes).
+
+config:
+  season: 2026
+  currentRound: 7
+  currentDate: Sat 23 May
+  nextMatchDate: Sat 23 May
+  nextMatchBounce: 2:40 PM
+  nextMatchVenue: Wallaroo Oval
+  nextMatchHomeOrAway: HOME
+  nextMatchOpponent: kadina
+  nextMatchOpponentName: Kadina
+  nextMatchOpponentRecord: 4 W · 2 L · 1st
+  ourRecord: 2 W · 3 L · 7th
+  thisWeekVenue: Wallaroo Oval
+  thisWeekVenueLabel: HOME ROUND

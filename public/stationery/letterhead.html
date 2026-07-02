@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallaroo FC — Letterhead</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Fraunces:ital,wght@0,400;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red:     #C8102E;
+    --navy:    #0A1F3D;
+    --cream:   #F5F1E8;
+    --charcoal:#15171C;
+    --grey:    #595D63;
+    --line:    #DAD3C2;
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: white;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* ── HEADER ─────────────────────────────── */
+  .lh-header {
+    background: var(--navy);
+    padding: 24mm 18mm 20mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16mm;
+  }
+
+  .lh-logo-block {
+    display: flex;
+    align-items: center;
+    gap: 7mm;
+    flex-shrink: 0;
+  }
+
+  .lh-crest {
+    width: 18mm;
+    height: 18mm;
+    flex-shrink: 0;
+  }
+
+  .lh-crest svg path { fill: white; }
+
+  .lh-wordmark {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .lh-wordmark-top {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 28pt;
+    line-height: 0.9;
+    color: white;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .lh-wordmark-sub {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 11pt;
+    color: #C8102E;
+    letter-spacing: 0.04em;
+    margin-top: 2mm;
+  }
+
+  .lh-tagline {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .lh-tagline-main {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 9pt;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 2mm;
+  }
+
+  .lh-tagline-year {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 36pt;
+    color: rgba(255,255,255,0.08);
+    line-height: 1;
+    display: block;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── RED RULE ───────────────────────────── */
+  .lh-rule {
+    height: 4px;
+    background: var(--red);
+  }
+
+  /* ── BODY ───────────────────────────────── */
+  .lh-body {
+    padding: 14mm 18mm 0;
+    min-height: 185mm;
+  }
+
+  .lh-date-ref {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10mm;
+    padding-bottom: 5mm;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .lh-date {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    color: var(--grey);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .lh-ref {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    color: var(--grey);
+    letter-spacing: 0.06em;
+  }
+
+  .lh-addressee {
+    margin-bottom: 8mm;
+  }
+
+  .lh-addressee p {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: var(--charcoal);
+  }
+
+  .lh-subject {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 14pt;
+    letter-spacing: 0.04em;
+    color: var(--navy);
+    text-transform: uppercase;
+    margin-bottom: 7mm;
+    padding-left: 4mm;
+    border-left: 3px solid var(--red);
+  }
+
+  .lh-content p {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 5mm;
+  }
+
+  .lh-sign-off {
+    margin-top: 14mm;
+  }
+
+  .lh-sign-off p {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5pt;
+    color: var(--charcoal);
+    line-height: 1.7;
+  }
+
+  .lh-sig-name {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 13pt;
+    color: var(--navy);
+    display: block;
+    margin-top: 10mm;
+    border-top: 1px solid var(--line);
+    padding-top: 3mm;
+  }
+
+  .lh-sig-role {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    letter-spacing: 0.08em;
+    color: var(--grey);
+    text-transform: uppercase;
+    display: block;
+    margin-top: 1mm;
+  }
+
+  /* ── FOOTER ─────────────────────────────── */
+  .lh-footer-rule {
+    height: 3px;
+    background: var(--red);
+    margin: 0 18mm;
+    margin-top: 14mm;
+  }
+
+  .lh-footer {
+    padding: 5mm 18mm 8mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8mm;
+  }
+
+  .lh-footer-contact {
+    display: flex;
+    gap: 8mm;
+    flex-wrap: wrap;
+  }
+
+  .lh-footer-item {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 7.5pt;
+    color: var(--grey);
+    line-height: 1.4;
+  }
+
+  .lh-footer-item strong {
+    display: block;
+    color: var(--navy);
+    font-size: 7pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.5mm;
+  }
+
+  .lh-footer-url {
+    font-family: 'Anton', Impact, sans-serif;
+    font-size: 8.5pt;
+    letter-spacing: 0.08em;
+    color: var(--red);
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  /* ── PRINT ───────────────────────────────── */
+  @media print {
+    body { width: 210mm; height: 297mm; margin: 0; }
+    .lh-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lh-rule   { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lh-footer-rule { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lh-subject { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="lh-header">
+    <div class="lh-logo-block">
+      <div class="lh-crest">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" width="100%" height="100%">
+          <path fill="white" d="M50.4 78.5a75.1 75.1 0 0 0-28.5 6.9l24.2-65.7c.7-2 1.9-3.2 3.4-3.2h29c1.5 0 2.7 1.2 3.4 3.2l24.2 65.7s-11.6-7-28.5-7L67 45.5c-.4-1.7-1.6-2.8-2.9-2.8-1.3 0-2.5 1.1-2.9 2.7L50.4 78.5Zm-1.1 28.2Zm-4.2-20.2c-2 6.6-.6 15.8 4.2 20.2a17.5 17.5 0 0 1 .2-.7 5.5 5.5 0 0 1 5.7-4.5c2.8.1 4.3 1.5 4.7 4.7.2 1.1.2 2.3.2 3.5v.4c0 2.7.7 5.2 2.2 7.4a13 13 0 0 0 5.7 4.9v-.3l-.2-.3c-1.8-5.6-.5-9.5 4.4-12.8l1.5-1a73 73 0 0 0 3.2-2.2 16 16 0 0 0 6.8-11.4c.3-2 .1-4-.6-6l-.8.6-1.6 1a37 37 0 0 1-22.4 2.7c-5-.7-9.7-2-13.2-6.2Z"/>
+        </svg>
+      </div>
+      <div class="lh-wordmark">
+        <span class="lh-wordmark-top">Wallaroo<br>Football Club</span>
+        <span class="lh-wordmark-sub">est. 1879 · Cornish Terrace</span>
+      </div>
+    </div>
+    <div class="lh-tagline">
+      <span class="lh-tagline-main">Yorke Peninsula Football League</span>
+      <span class="lh-tagline-year">2026</span>
+    </div>
+  </header>
+
+  <div class="lh-rule"></div>
+
+  <!-- BODY -->
+  <div class="lh-body">
+
+    <div class="lh-date-ref">
+      <span class="lh-date">_________ May 2026</span>
+      <span class="lh-ref">Ref: ___________</span>
+    </div>
+
+    <div class="lh-addressee">
+      <p>
+        [Recipient Name]<br>
+        [Position / Organisation]<br>
+        [Address Line 1]<br>
+        [Address Line 2]<br>
+        [Town, State, Postcode]
+      </p>
+    </div>
+
+    <div class="lh-subject">Re: [Subject of Letter]</div>
+
+    <div class="lh-content">
+      <p>Dear [Name],</p>
+      <p>
+        [Body of correspondence goes here. This template is set in Inter 10.5pt with 1.7
+        line height, matching the body type used across the Wallaroo FC website.]
+      </p>
+      <p>
+        [Second paragraph. Continue as required. The layout accommodates approximately
+        45–50 lines of body text before the footer on a single A4 page.]
+      </p>
+    </div>
+
+    <div class="lh-sign-off">
+      <p>Yours sincerely,</p>
+      <span class="lh-sig-name">[Signatory Name]</span>
+      <span class="lh-sig-role">[Position] · Wallaroo Football Club</span>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="lh-footer-rule"></div>
+  <footer class="lh-footer">
+    <div class="lh-footer-contact">
+      <div class="lh-footer-item">
+        <strong>Ground</strong>
+        Wallaroo Oval, Cornish Terrace<br>Wallaroo SA 5556
+      </div>
+      <div class="lh-footer-item">
+        <strong>Contact</strong>
+        info@wallaroofc.com.au
+      </div>
+      <div class="lh-footer-item">
+        <strong>League</strong>
+        Yorke Peninsula Football League
+      </div>
+    </div>
+    <div class="lh-footer-url">wallaroo-fc.vercel.app</div>
+  </footer>
+
+</body>
+</html>

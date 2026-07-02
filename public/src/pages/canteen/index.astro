@@ -1,0 +1,1252 @@
+---
+export const prerender = false;
+import { getAdminClient } from '../../lib/supabase';
+
+const admin = getAdminClient();
+
+// ── Players for signup dropdown ───────────────────────────────────────────
+// Only fetch what the client needs (no private data)
+const { data: playerRows } = await admin
+  .from('players')
+  .select('full_name, grade, club')
+  .eq('season', 2026)
+  .eq('registration_status', 'active')
+  .order('grade')
+  .order('last_name');
+
+// Shape for client-side dropdown
+const playersForClient = (playerRows ?? []).map(p => ({
+  n: p.full_name,   // name
+  g: p.grade ?? '', // grade
+  c: p.club  ?? 'football', // club
+}));
+
+const { data: gameDays } = await admin
+  .from('canteen_game_days')
+  .select('id, round, match_date')
+  .eq('season', 2026)
+  .eq('active', true)
+  .order('match_date');
+
+const { data: allSlots } = await admin
+  .from('canteen_slots')
+  .select('*')
+  .order('slot_order')
+  .order('sort_order');
+
+const days = (gameDays ?? []).map(gd => {
+  const slots  = (allSlots ?? []).filter(s => s.game_day_id === gd.id);
+  const filled = slots.filter(s => s.volunteer_name && !s.no_fill).length;
+  const needed = slots.filter(s => !s.volunteer_name && !s.no_fill).length;
+  const dt     = new Date(gd.match_date + 'T00:00:00');
+  const byKey: Record<string, any> = {};
+  for (const s of slots) byKey[`${s.time_slot}|${s.station}|${s.station_index}`] = s;
+  return {
+    ...gd,
+    label:   dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+    dayName: dt.toLocaleDateString('en-AU', { weekday: 'long' }),
+    slots, filled, needed, byKey,
+  };
+});
+
+const today = new Date(); today.setHours(0,0,0,0);
+const defaultIdx = Math.max(0, days.findIndex(d => new Date(d.match_date) >= today));
+
+const STATIONS = [
+  { station: 'Till',            index: 1, label: 'Till' },
+  { station: 'Serving',         index: 1, label: 'Serving' },
+  { station: 'Serving',         index: 2, label: 'Serving' },
+  { station: 'Hot Chips',       index: 1, label: 'Hot Chips' },
+  { station: 'Hot Chips',       index: 2, label: 'Hot Chips' },
+  { station: 'Coffee/Pastries', index: 1, label: 'Coffee & Pastries' },
+  { station: 'Hot Dogs',        index: 1, label: 'Hot Dogs' },
+  { station: 'Hot Dogs',        index: 2, label: 'Hot Dogs' },
+  { station: 'Chicken Burgers', index: 1, label: 'Chicken Burgers' },
+];
+
+const TIME_SLOTS = ['9.30-11.30', '11.30-1.30', '1.30-3.30'];
+
+const GRADE_ABBR: Record<string, string> = {
+  'A-Grade':      "A's",
+  'B Grade':      "B's",
+  'Junior Colts': 'U14',
+  'Senior Colts': 'U17',
+};
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canteen Roster — Wallaroo FC 2026</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue:     #0D2B55;
+      --blue-dk:  #081d3d;
+      --red:      #C8102E;
+      --cream:    #F5F0E8;
+      --white:    #FFFFFF;
+      --grey:     #6B7280;
+      --line:     #E5E7EB;
+      --green:    #166534;
+      --green-bg: #DCFCE7;
+    }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--cream); color: #1a1a2e; -webkit-font-smoothing: antialiased; }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Top bar ─────────────────────────────────────────────── */
+    .topbar {
+      background: var(--blue-dk); padding: 10px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .topbar-brand { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.08em; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .topbar-brand img { width: 28px; height: 28px; }
+    .topbar-back { font-size: 12px; color: rgba(255,255,255,0.5); letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; gap: 6px; transition: color 0.2s; }
+    .topbar-back:hover { color: rgba(255,255,255,0.85); }
+
+    /* ── Page header ─────────────────────────────────────────── */
+    .page-header {
+      background: var(--blue);
+      padding: 56px 24px 44px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .page-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 130%, rgba(200,16,46,0.22) 0%, transparent 60%);
+    }
+    .page-header::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+      background: var(--red);
+    }
+    .page-header-inner { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; }
+    .header-eyebrow {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 13px; letter-spacing: 0.24em; color: var(--red);
+      margin-bottom: 10px; text-transform: uppercase;
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+    }
+    .header-eyebrow::before, .header-eyebrow::after { content: ''; width: 28px; height: 2px; background: var(--red); }
+    .header-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(44px, 9vw, 80px); letter-spacing: 0.04em; color: #fff; line-height: 1; margin-bottom: 16px; }
+    .header-sub { font-size: 15px; color: rgba(255,255,255,0.62); line-height: 1.65; max-width: 520px; margin: 0 auto 24px; }
+    .rules-list {
+      display: inline-flex; flex-direction: column; gap: 8px; text-align: left;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 16px 24px; list-style: none;
+    }
+    .rules-list li { font-size: 13px; color: rgba(255,255,255,0.72); display: flex; align-items: flex-start; gap: 10px; }
+    .rules-list li::before { content: '✓'; color: #4ade80; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Date tabs ───────────────────────────────────────────── */
+    .tabs-wrap { background: var(--blue); position: sticky; top: 0; z-index: 50; border-bottom: 3px solid var(--red); }
+    .tabs { display: flex; overflow-x: auto; max-width: 1300px; margin: 0 auto; padding: 0 12px; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex-shrink: 0; background: none; border: none; cursor: pointer;
+      padding: 12px 18px 10px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      color: rgba(255,255,255,0.45); border-bottom: 3px solid transparent; margin-bottom: -3px;
+      transition: all 0.18s;
+    }
+    .tab-btn:hover { color: rgba(255,255,255,0.8); }
+    .tab-btn.active { color: #fff; border-bottom-color: var(--red); }
+    .tab-date { font-family: 'Bebas Neue', sans-serif; font-size: 16px; letter-spacing: 0.04em; }
+    .tab-round { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; }
+    .tab-spots {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-top: 2px;
+      background: rgba(200,16,46,0.22); color: #fca5a5;
+    }
+    .tab-btn.active .tab-spots { background: var(--red); color: #fff; }
+    .tab-spots.full { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .tab-btn.active .tab-spots.full { background: #166534; color: #d1fae5; }
+
+    /* ── Page body ───────────────────────────────────────────── */
+    .page-body { max-width: 1300px; margin: 0 auto; padding: 28px 16px 80px; }
+    .game-panel { display: none; }
+    .game-panel.active { display: block; }
+
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+    }
+    .panel-title { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 0.04em; color: var(--blue); }
+    .panel-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat-pill { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 12px; border-radius: 99px; }
+    .stat-green  { background: var(--green-bg); color: var(--green); }
+    .stat-red    { background: #FEE2E2; color: #991B1B; }
+
+    /* ── Grid ────────────────────────────────────────────────── */
+    .roster-scroll { overflow-x: auto; border-radius: 8px; box-shadow: 0 2px 16px rgba(0,0,0,0.1); }
+    table.roster { width: 100%; border-collapse: collapse; background: var(--white); min-width: 860px; }
+
+    table.roster thead th {
+      background: var(--blue); color: rgba(255,255,255,0.8);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 11px 8px; text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.08);
+    }
+    table.roster thead th:first-child {
+      min-width: 88px; text-align: left; padding-left: 16px;
+      border-right: 2px solid rgba(255,255,255,0.15);
+    }
+    table.roster thead th:last-child { border-right: none; }
+
+    table.roster tbody tr { border-bottom: 1px solid var(--line); }
+    table.roster tbody tr:last-child { border-bottom: none; }
+    table.roster tbody tr:nth-child(even) { background: #FAFAFA; }
+    table.roster tbody td { padding: 0; border-right: 1px solid var(--line); vertical-align: middle; }
+    table.roster tbody td:first-child { background: #F3F4F6; border-right: 2px solid var(--line); }
+    table.roster tbody td:last-child { border-right: none; }
+
+    .time-label { padding: 12px 10px 12px 14px; }
+    .time-main { font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--blue); letter-spacing: 0.04em; display: block; }
+    .time-end  { font-size: 10px; color: var(--grey); letter-spacing: 0.08em; display: block; margin-top: 1px; }
+
+    .slot-cell { padding: 8px 6px; min-height: 70px; display: flex; align-items: center; justify-content: center; }
+
+    /* filled */
+    .slot-filled {
+      flex-direction: column; gap: 3px; text-align: center;
+      cursor: pointer; border-radius: 4px; transition: background 0.15s;
+      width: 100%; padding: 8px 6px; border: none; background: none; font-family: inherit;
+    }
+    .slot-filled:hover  { background: rgba(200,16,46,0.06); }
+    .slot-filled:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .slot-filled:hover .vol-name { color: var(--red); }
+    .filled-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; margin: 0 auto 2px; flex-shrink: 0; }
+    .vol-name { font-size: 12px; font-weight: 600; color: var(--blue); line-height: 1.3; }
+    .vol-grade { font-size: 10px; color: var(--grey); }
+    .change-hint { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: transparent; transition: color 0.15s; margin-top: 1px; }
+    .slot-filled:hover .change-hint { color: rgba(200,16,46,0.6); }
+    .slot-mine .filled-dot { background: #15803d; box-shadow: 0 0 0 3px rgba(21,128,61,0.15); }
+    .slot-mine .vol-name { color: var(--green); }
+
+    /* pending (selected but not yet submitted) */
+    .slot-pending {
+      display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center;
+      width: 100%; padding: 8px 6px; border: none; font-family: inherit;
+      background: rgba(234,179,8,0.08); border-radius: 4px;
+      cursor: default; transition: background 0.15s;
+    }
+    .slot-pending:hover { background: rgba(234,179,8,0.14); }
+    .pending-dot { width: 7px; height: 7px; border-radius: 50%; background: #ca8a04; margin: 0 auto 2px; flex-shrink: 0; animation: pulse-dot 1.4s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .slot-pending .vol-name, .pending-name { font-size: 11px; font-weight: 700; color: #92400e; }
+    .pending-label { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: #ca8a04; margin-top: 1px; }
+
+    /* empty */
+    .slot-empty { width: 100%; height: 100%; }
+    .signup-btn {
+      width: 100%; height: 100%; min-height: 54px;
+      background: none; border: 1.5px dashed rgba(200,16,46,0.3);
+      border-radius: 6px; cursor: pointer; padding: 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: rgba(200,16,46,0.7); transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    }
+    .signup-btn:hover { background: rgba(200,16,46,0.07); border-color: var(--red); color: var(--red); }
+    .signup-btn svg { width: 16px; height: 16px; }
+
+    /* no fill */
+    .slot-nofill { color: #D1D5DB; font-size: 16px; }
+
+    /* ── Club colour coding ──────────────────────────────────── */
+    .slot-cell[data-club="football"] { background: rgba(34,197,94,0.12); }
+    .slot-cell[data-club="netball"]  { background: rgba(6,182,212,0.12); }
+
+    /* ── Legend ──────────────────────────────────────────────── */
+    .legend {
+      display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px;
+      padding: 12px 16px; background: #F9FAFB; border: 1px solid var(--line); border-radius: 6px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--grey); }
+    .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .leg-dot.filled { background: #22c55e; }
+    .leg-dot.empty  { background: transparent; border: 1.5px dashed rgba(200,16,46,0.5); border-radius: 2px; width: 14px; height: 10px; }
+    .leg-dot.nofill { background: #E5E7EB; border: 1px solid #D1D5DB; }
+    .leg-bar { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+    .leg-bar.football { background: rgba(34,197,94,0.7); }
+    .leg-bar.netball  { background: rgba(6,182,212,0.7); }
+
+    /* ── Modal ───────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(5,15,30,0.65); z-index: 900; backdrop-filter: blur(2px);
+      align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--white); border-radius: 12px; width: 100%; max-width: 440px;
+      padding: 32px; position: relative; box-shadow: 0 32px 80px rgba(0,0,0,0.35);
+      animation: modal-in 0.25s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(16px) scale(0.97); } }
+    .modal-close { position: absolute; top: 14px; right: 14px; background: none; border: none; cursor: pointer; font-size: 18px; color: var(--grey); padding: 4px 8px; border-radius: 4px; }
+    .modal-close:hover { background: #F3F4F6; }
+    .modal-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 4px; }
+    .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: var(--blue); letter-spacing: 0.04em; line-height: 1; margin-bottom: 6px; }
+    .modal-context { font-size: 13px; color: var(--grey); margin-bottom: 20px; }
+    .modal-note { background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #92400E; margin-bottom: 20px; line-height: 1.5; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); margin-bottom: 6px; }
+    .form-group label .req { color: var(--red); }
+    .form-group input {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 6px;
+      font-size: 15px; color: var(--blue); outline: none; transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: var(--red); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-cancel { flex: 1; padding: 11px; border: 1.5px solid var(--line); background: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--grey); }
+    .btn-cancel:hover { border-color: var(--grey); }
+    .btn-submit { flex: 2; padding: 11px; background: var(--red); border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; }
+    .btn-submit:hover { background: #a50e25; }
+    .btn-submit:disabled { background: #9CA3AF; cursor: not-allowed; }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    .page-footer { background: var(--blue-dk); color: rgba(255,255,255,0.45); text-align: center; padding: 24px; font-size: 12px; }
+    .page-footer a { color: rgba(255,255,255,0.6); }
+
+    /* ── Submit warning banner ──────────────────────────────────── */
+    .submit-warning {
+      background: #FFF7ED; border-top: 3px solid #F59E0B; border-bottom: 1px solid #FDE68A;
+      padding: 12px 24px; text-align: center; font-size: 13px; color: #78350F;
+      display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    }
+    .submit-warning strong { font-weight: 700; }
+
+    /* ── Submit bar (sticky bottom) ─────────────────────────────── */
+    .submit-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
+      background: #0A1F3D; border-top: 3px solid #F59E0B;
+      padding: 14px 24px;
+      display: none; /* shown via JS when pendingSelections > 0 */
+      align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.35);
+    }
+    .submit-bar.visible { display: flex; }
+    .submit-bar-info { color: rgba(255,255,255,0.85); font-size: 14px; }
+    .submit-bar-info strong { color: #FCD34D; font-size: 16px; }
+    .submit-bar-info small { display: block; font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    .submit-all-btn {
+      background: #F59E0B; color: #1a1a2e; border: none; border-radius: 6px;
+      padding: 12px 28px; font-size: 14px; font-weight: 800; letter-spacing: 0.08em;
+      text-transform: uppercase; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .submit-all-btn:hover { background: #FBBF24; transform: translateY(-1px); }
+    .submit-all-btn:disabled { background: #6B7280; cursor: not-allowed; transform: none; }
+    .clear-pending-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.5);
+      border-radius: 6px; padding: 11px 16px; font-size: 12px; cursor: pointer; transition: 0.15s;
+    }
+    .clear-pending-btn:hover { border-color: rgba(255,255,255,0.5); color: rgba(255,255,255,0.8); }
+    /* extra page-body padding so submit bar doesn't cover content */
+    body.has-pending .page-body { padding-bottom: 120px; }
+
+    /* ── Coordinator link ─────────────────────────────────────── */
+    .coord-link {
+      background: none; border: none; padding: 0;
+      cursor: pointer; font-size: inherit; color: inherit;
+      font-family: inherit; line-height: inherit;
+      text-decoration: underline; text-underline-offset: 3px;
+      text-decoration-color: rgba(255,255,255,0.45);
+    }
+    .coord-link:hover { text-decoration-color: rgba(255,255,255,0.9); }
+    .coord-link-amber { text-decoration-color: rgba(146,64,14,0.5); }
+    .coord-link-amber:hover { text-decoration-color: #92400E; }
+
+    /* ── Coordinator modal extras ────────────────────────────── */
+    .coord-textarea {
+      width: 100%; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 6px;
+      font-size: 15px; color: var(--blue); outline: none; transition: border-color 0.2s;
+      font-family: 'Inter', system-ui, sans-serif; resize: vertical; min-height: 90px;
+    }
+    .coord-textarea:focus { border-color: var(--red); }
+    .form-group select {
+      width: 100%; padding: 10px 40px 10px 14px; border: 1.5px solid var(--line); border-radius: 6px;
+      font-size: 15px; color: var(--blue); outline: none; transition: border-color 0.2s;
+      background-color: #fff; cursor: pointer;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+    }
+    .form-group select:focus { border-color: var(--red); }
+    .form-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--grey); margin: 18px 0 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .form-section-label::before, .form-section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+    /* ── Shift summary card (slot mode) ─────────────────────── */
+    .shift-summary {
+      background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 16px;
+    }
+    .shift-summary-label { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #1D4ED8; margin-bottom: 8px; }
+    .shift-summary-items { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 4px; }
+    .shift-summary-item { font-size: 13px; color: var(--blue); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .shift-summary-item::before { content: ''; width: 6px; height: 6px; background: #3B82F6; border-radius: 50%; flex-shrink: 0; }
+    .shift-current { font-size: 12px; color: #6B7280; margin-top: 6px; }
+
+    /* ── Request type radios ─────────────────────────────────── */
+    .radio-group { display: flex; flex-direction: column; gap: 8px; }
+    .radio-option {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer;
+      transition: all 0.15s; font-size: 14px; color: #374151;
+    }
+    .radio-option:hover { border-color: #93C5FD; background: #EFF6FF; }
+    .radio-option input[type="radio"] { accent-color: var(--red); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+    .radio-option:has(input:checked) { border-color: var(--red); background: #FFF5F5; color: var(--red); font-weight: 600; }
+
+    /* Scrollable modal for longer forms */
+    .modal { max-height: 92vh; overflow-y: auto; }
+    .modal-success {
+      display: none; text-align: center; padding: 16px 0 8px;
+    }
+    .modal-success .success-icon { font-size: 40px; margin-bottom: 10px; }
+    .modal-success .success-heading { font-family: 'Bebas Neue', sans-serif; font-size: 24px; color: var(--green); letter-spacing: 0.04em; margin-bottom: 6px; }
+    .modal-success .success-body { font-size: 13px; color: var(--grey); line-height: 1.5; }
+
+    /* ── Player dropdown (signup modal) ─────────────────────── */
+    .player-dropdown {
+      width: 100%; padding: 10px 40px 10px 14px; border: 1.5px solid var(--line); border-radius: 6px;
+      font-size: 15px; color: var(--blue); outline: none; transition: border-color 0.2s;
+      background-color: #fff; cursor: pointer;
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+    }
+    .player-dropdown:focus { border-color: var(--red); }
+    .eligibility-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #1D4ED8; background: #EFF6FF; border: 1px solid #BFDBFE;
+      border-radius: 99px; padding: 4px 12px; margin-bottom: 10px;
+    }
+    .slot-team-tag {
+      font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: rgba(200,16,46,0.55); margin-top: 2px; line-height: 1.2;
+    }
+
+    @media (max-width: 640px) {
+      .page-header { padding: 40px 16px 36px; }
+      .rules-list { width: 100%; max-width: 100%; }
+      .panel-header { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+  <!-- Player data for signup dropdowns (name, grade, club only — no private data) -->
+  <script type="application/json" id="__canteen-players">{JSON.stringify(playersForClient)}</script>
+</head>
+<body>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <img src="/favicon.svg" alt="" />
+      Wallaroo FC
+    </div>
+    <a href="/" class="topbar-back">← Back to site</a>
+  </div>
+
+  <!-- Header -->
+  <header class="page-header">
+    <div class="page-header-inner">
+      <div class="header-eyebrow">Wallaroo FC · 2026 Season</div>
+      <h1 class="header-title">Canteen Roster</h1>
+      <p class="header-sub">
+        Every family helps keep the canteen running — it's what makes game day great.
+        Find a home game below and claim your spots.
+      </p>
+      <ul class="rules-list">
+        <li>Click any open spot to select the player you're doing the canteen shift for</li>
+        <li>To change or remove your signup, contact the <button class="coord-link" onclick="openCoordinator()">canteen coordinator</button></li>
+        <li>Please arrive 5 minutes before your time slot starts</li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Submit warning banner -->
+  <div class="submit-warning" role="alert">
+    ⚠ <span><strong>Selecting a shift does not save it.</strong> You must click the <strong>Submit My Selections</strong> button that appears at the bottom of the page to confirm your signup. If you do not click Submit, your selections will not be saved.</span>
+  </div>
+
+  <!-- Date tabs -->
+  <nav class="tabs-wrap" aria-label="Select game date">
+    <div class="tabs" role="tablist">
+      {days.map((d, i) => (
+        <button
+          class={`tab-btn${i === defaultIdx ? ' active' : ''}`}
+          role="tab"
+          aria-selected={i === defaultIdx}
+          data-tab={i}
+          onclick="switchTab(this)"
+        >
+          <span class="tab-round">Rd {d.round}</span>
+          <span class="tab-date">{d.label}</span>
+          <span class={`tab-spots${d.needed === 0 ? ' full' : ''}`}>
+            {d.needed === 0 ? '✓ Full' : `${d.needed} open`}
+          </span>
+        </button>
+      ))}
+    </div>
+  </nav>
+
+  <!-- Game panels -->
+  <main class="page-body">
+    {days.map((d, i) => {
+      return (
+        <div class={`game-panel${i === defaultIdx ? ' active' : ''}`} data-panel={i}>
+          <div class="panel-header">
+            <div class="panel-title">Round {d.round} · {d.dayName}, {d.label}</div>
+            <div class="panel-stats">
+              <span class="stat-pill stat-green">✓ {d.filled} filled</span>
+              {d.needed > 0
+                ? <span class="stat-pill stat-red">{d.needed} spots open</span>
+                : <span class="stat-pill stat-green">Roster complete</span>
+              }
+            </div>
+          </div>
+
+          <div class="roster-scroll">
+            <table class="roster" role="grid">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  {STATIONS.map(st => <th>{st.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {TIME_SLOTS.map(ts => {
+                  const [start, end] = ts.split('-');
+                  return (
+                    <tr>
+                      <td>
+                        <div class="time-label">
+                          <span class="time-main">{start}</span>
+                          <span class="time-end">until {end}</span>
+                        </div>
+                      </td>
+                      {STATIONS.map(st => {
+                        const slot = d.byKey[`${ts}|${st.station}|${st.index}`];
+                        if (!slot || slot.no_fill) {
+                          return (
+                            <td>
+                              <div class="slot-cell slot-nofill" title="Not required this session">–</div>
+                            </td>
+                          );
+                        }
+                        if (slot.volunteer_name) {
+                          return (
+                            <td>
+                              <div
+                                class="slot-cell slot-filled"
+                                data-club={slot.club ?? 'any'}
+                                data-slot-id={slot.id}
+                                data-round={d.round}
+                                data-date={d.label}
+                                data-time={ts}
+                                data-station={st.label}
+                                data-vol={slot.volunteer_name}
+                                onclick="openShiftChange(this)"
+                                onkeydown="if(event.key==='Enter')openShiftChange(this)"
+                                role="button"
+                                tabindex="0"
+                                title="Tap to request a change or removal"
+                              >
+                                <div class="filled-dot"></div>
+                                <div class="vol-name">{slot.volunteer_name}</div>
+                                {slot.volunteer_grade && <div class="vol-grade">{slot.volunteer_grade}</div>}
+                                <div class="change-hint">tap to change</div>
+                              </div>
+                            </td>
+                          );
+                        }
+                        const _slotClub   = slot.club ?? 'any';
+                        const _slotGrades: string[] = slot.eligible_grades ?? [];
+                        const _clubEmoji  = _slotClub === 'football' ? '🏉' : _slotClub === 'netball' ? '🏐' : '';
+                        const _teamTag    = _slotGrades.length > 0
+                          ? `${_clubEmoji ? _clubEmoji + ' ' : ''}${_slotGrades.map(g => GRADE_ABBR[g] ?? g).join(' · ')}`
+                          : '';
+                        return (
+                          <td>
+                            <div class="slot-cell slot-empty" data-club={_slotClub}>
+                              <button
+                                class="signup-btn"
+                                data-slot-id={slot.id}
+                                data-date={d.label}
+                                data-round={d.round}
+                                data-time={ts}
+                                data-station={st.label}
+                                data-club={_slotClub}
+                                data-grades={JSON.stringify(_slotGrades)}
+                                onclick="openSignup(this)"
+                              >
+                                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2">
+                                  <circle cx="8" cy="8" r="7"/>
+                                  <line x1="8" y1="5" x2="8" y2="11"/>
+                                  <line x1="5" y1="8" x2="11" y2="8"/>
+                                </svg>
+                                Sign up
+                              </button>
+                              {_teamTag && <div class="slot-team-tag">{_teamTag}</div>}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="legend">
+            <div class="legend-item"><div class="leg-dot filled"></div> Spot filled</div>
+            <div class="legend-item"><div class="leg-dot empty"></div> Open — tap to volunteer</div>
+            <div class="legend-item"><div class="leg-dot nofill"></div> Not required this session</div>
+            <div class="legend-item"><div class="leg-bar football"></div> 🏉 Football shift</div>
+            <div class="legend-item"><div class="leg-bar netball"></div> 🏐 Netball shift</div>
+          </div>
+        </div>
+      );
+    })}
+  </main>
+
+  <!-- Submit bar (sticky bottom — visible when pending selections exist) -->
+  <div class="submit-bar" id="submit-bar" role="region" aria-live="polite">
+    <div class="submit-bar-info">
+      <strong id="pending-count-label">0 shifts selected</strong>
+      <small>Not saved yet — click Submit to confirm</small>
+    </div>
+    <button class="submit-all-btn" id="submit-all-btn" onclick="submitAllPending()">
+      Submit My Selections →
+    </button>
+    <button class="clear-pending-btn" onclick="clearAllPending()">Clear</button>
+  </div>
+
+  <!-- Sign-up modal -->
+  <div class="modal-overlay" id="signup-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
+    <div class="modal">
+      <button class="modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+      <div class="modal-eyebrow" id="modal-eyebrow">Sign Up</div>
+      <div class="modal-title" id="modal-title-text">Claim this spot</div>
+      <div class="modal-context" id="modal-context"></div>
+      <div class="modal-note">📋 Your selection will appear in the roster as <strong>Pending</strong>. You must click <strong>Submit My Selections</strong> at the bottom of the page to save it. To change or remove a confirmed signup, contact the <button class="coord-link coord-link-amber" onclick="closeModal();openCoordinator()">canteen coordinator</button>.</div>
+      <form id="signup-form" onsubmit="submitSignup(event)">
+        <input type="hidden" id="active-slot-id" />
+
+        <!-- Eligibility badge (shown when slot has restrictions) -->
+        <div id="slot-eligibility-badge" class="eligibility-badge" style="display:none"></div>
+
+        <!-- Player dropdown -->
+        <div class="form-group">
+          <label>Select player <span class="req">*</span></label>
+          <select id="player-select" class="player-dropdown" onchange="onPlayerSelect(this)" required>
+            <option value="">— Choose a player —</option>
+          </select>
+        </div>
+
+        <!-- Manual name input (shown when "type manually" selected) -->
+        <div class="form-group" id="manual-name-wrap" style="display:none">
+          <label>Player name <span class="req">*</span></label>
+          <input type="text" id="vol-name" placeholder="e.g. Sarah Mitchell" autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label>Phone <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — coordinator use only)</span></label>
+          <input type="tel" id="vol-phone" placeholder="04xx xxx xxx" autocomplete="tel" />
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn-submit" id="submit-btn">Add to My Selections</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Coordinator contact modal -->
+  <div class="modal-overlay" id="coordinator-modal" role="dialog" aria-modal="true" aria-labelledby="coord-modal-title">
+    <div class="modal">
+      <button class="modal-close" onclick="closeCoordinator()" aria-label="Close">✕</button>
+      <div class="modal-eyebrow">Canteen Roster</div>
+      <div class="modal-title" id="coord-modal-title">Contact Coordinator</div>
+      <div class="modal-context" id="coord-modal-context">Select your shift to get started.</div>
+
+      <div id="coord-form-wrap">
+        <form id="coordinator-form" onsubmit="submitCoordinator(event)">
+          <input type="hidden" id="coord-slot-id" />
+
+          <!-- Slot-mode: shift summary card (shown when opened from a filled slot) -->
+          <div id="coord-shift-summary" class="shift-summary" style="display:none">
+            <div class="shift-summary-label">Shift selected</div>
+            <div class="shift-summary-items">
+              <div class="shift-summary-item" id="coord-sum-gameday"></div>
+              <div class="shift-summary-item" id="coord-sum-time"></div>
+              <div class="shift-summary-item" id="coord-sum-station" style="display:none"></div>
+            </div>
+            <div class="shift-current" id="coord-sum-current"></div>
+          </div>
+
+          <!-- Generic-mode: shift dropdowns (shown from the "canteen coordinator" link) -->
+          <div id="coord-shift-selects">
+            <div class="form-section-label">Which shift?</div>
+            <div class="form-group">
+              <label>Game day <span class="req">*</span></label>
+              <select id="coord-gameday">
+                <option value="">Select a round…</option>
+                {days.map(d => (
+                  <option value={`Round ${d.round} – ${d.dayName} ${d.label}`}>
+                    Round {d.round} — {d.dayName} {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Time slot <span class="req">*</span></label>
+              <select id="coord-timeslot">
+                <option value="">Select a time…</option>
+                <option value="9:30 – 11:30">9:30 – 11:30</option>
+                <option value="11:30 – 1:30">11:30 – 1:30</option>
+                <option value="1:30 – 3:30">1:30 – 3:30</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Station <span style="font-weight:400;text-transform:none;letter-spacing:0">(if known)</span></label>
+              <select id="coord-station">
+                <option value="">Select a station…</option>
+                <option value="Till">Till</option>
+                <option value="Serving (1)">Serving (1)</option>
+                <option value="Serving (2)">Serving (2)</option>
+                <option value="Hot Chips (1)">Hot Chips (1)</option>
+                <option value="Hot Chips (2)">Hot Chips (2)</option>
+                <option value="Coffee & Pastries">Coffee &amp; Pastries</option>
+                <option value="Hot Dogs (1)">Hot Dogs (1)</option>
+                <option value="Hot Dogs (2)">Hot Dogs (2)</option>
+                <option value="Chicken Burgers">Chicken Burgers</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- What do they need? -->
+          <div class="form-section-label">What do you need?</div>
+          <div class="form-group">
+            <div class="radio-group">
+              <label class="radio-option">
+                <input type="radio" name="coord-reqtype" value="change" id="coord-req-change" />
+                <span>Change my shift to a different date or time</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="coord-reqtype" value="remove" id="coord-req-remove" />
+                <span>Remove me from this shift</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Your details -->
+          <div class="form-section-label">Your details</div>
+          <div class="form-group">
+            <label>Your name <span class="req">*</span></label>
+            <input type="text" id="coord-name" placeholder="e.g. Sarah Mitchell" required autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label>Phone <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <input type="tel" id="coord-phone" placeholder="04xx xxx xxx" autocomplete="tel" />
+          </div>
+
+          <!-- Free-text message -->
+          <div class="form-section-label">Message</div>
+          <div class="form-group">
+            <textarea id="coord-message" class="coord-textarea" placeholder="Add any details here — preferred new dates, reason for removal, questions, etc." required></textarea>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-cancel" onclick="closeCoordinator()">Cancel</button>
+            <button type="submit" class="btn-submit" id="coord-submit-btn">Send to Coordinator</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-success" id="coord-success">
+        <div class="success-icon">✅</div>
+        <div class="success-heading">Request Sent</div>
+        <div class="success-body">The canteen coordinator has been notified and will be in touch shortly.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="page-footer">
+    Wallaroo FC · 2026 Season · <a href="/">wallaroofc.com.au</a>
+  </footer>
+
+  <script>
+    // ── Tab switching ─────────────────────────────────────────
+    function switchTab(btn) {
+      const idx = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === idx);
+        b.setAttribute('aria-selected', b.dataset.tab === idx ? 'true' : 'false');
+      });
+      document.querySelectorAll('.game-panel').forEach(p => {
+        p.classList.toggle('active', p.dataset.panel === idx);
+      });
+      // Scroll tab into view
+      btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    // ── Player data (injected server-side) ───────────────────
+    // Each entry: { n: fullName, g: grade, c: club }
+    let __players = [];
+    try {
+      const el = document.getElementById('__canteen-players');
+      if (el) __players = JSON.parse(el.textContent || '[]');
+    } catch {}
+
+    // ── LocalStorage ──────────────────────────────────────────
+    const MINE_KEY = 'wfc_canteen_mine';
+    function getMine() {
+      try { return new Set(JSON.parse(localStorage.getItem(MINE_KEY) ?? '[]')); }
+      catch { return new Set(); }
+    }
+    function saveMine(s) { localStorage.setItem(MINE_KEY, JSON.stringify([...s])); }
+
+    // ── Pending selections ────────────────────────────────────
+    // Each entry: { slotId, name, grade, phone, round, date, time, station, club, gradesRaw, cell }
+    let pendingSelections = [];
+
+    function updateSubmitBar() {
+      const n     = pendingSelections.length;
+      const bar   = document.getElementById('submit-bar');
+      const label = document.getElementById('pending-count-label');
+      label.textContent = n === 1 ? '1 shift selected' : `${n} shifts selected`;
+      bar.classList.toggle('visible', n > 0);
+      document.body.classList.toggle('has-pending', n > 0);
+    }
+
+    async function submitAllPending() {
+      if (pendingSelections.length === 0) return;
+      const btn = document.getElementById('submit-all-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const committed = [];
+      let errorMsg = null;
+
+      for (const sel of pendingSelections) {
+        try {
+          const res  = await fetch('/api/canteen/signup', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ slot_id: sel.slotId, name: sel.name, phone: sel.phone, grade: sel.grade }),
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            errorMsg = data.error ?? 'Something went wrong';
+            break;
+          }
+          // Commit cell: convert pending → confirmed filled
+          const cell = sel.cell;
+          if (cell) {
+            cell.className = 'slot-cell slot-filled slot-mine';
+            cell.setAttribute('data-slot-id', sel.slotId);
+            cell.setAttribute('data-round',   sel.round   || '');
+            cell.setAttribute('data-date',    sel.date    || '');
+            cell.setAttribute('data-time',    sel.time    || '');
+            cell.setAttribute('data-station', sel.station || '');
+            cell.setAttribute('data-vol',     sel.name);
+            cell.setAttribute('role',         'button');
+            cell.setAttribute('tabindex',     '0');
+            cell.setAttribute('title',        'Tap to request a change or removal');
+            cell.onclick = function() { openShiftChange(this); };
+            cell.innerHTML = `
+              <div class="filled-dot"></div>
+              <div class="vol-name">${sel.name}</div>
+              ${sel.grade ? `<div class="vol-grade">${sel.grade}</div>` : ''}
+              <div class="change-hint">tap to change</div>
+            `;
+            // Update tab badge & panel stats
+            const panel = cell.closest('.game-panel');
+            if (panel) {
+              const remaining = panel.querySelectorAll('.signup-btn').length;
+              const tab   = document.querySelector(`.tab-btn[data-tab="${panel.dataset.panel}"]`);
+              const badge = tab?.querySelector('.tab-spots');
+              if (badge) {
+                if (remaining === 0) { badge.textContent = '✓ Full'; badge.classList.add('full'); }
+                else { badge.textContent = `${remaining} open`; badge.classList.remove('full'); }
+              }
+              const statPill = panel.querySelector('.stat-red,.stat-green');
+              if (statPill) {
+                if (remaining === 0) { statPill.className = 'stat-pill stat-green'; statPill.textContent = 'Roster complete'; }
+                else { statPill.textContent = `${remaining} spots open`; }
+              }
+            }
+            // Persist to localStorage
+            const mySet = getMine(); mySet.add(sel.slotId); saveMine(mySet);
+          }
+          committed.push(sel.slotId);
+        } catch {
+          errorMsg = 'Network error — please check your connection and try again.';
+          break;
+        }
+      }
+
+      // Remove successfully committed items from pending
+      pendingSelections = pendingSelections.filter(s => !committed.includes(s.slotId));
+      updateSubmitBar();
+      btn.disabled = false;
+      btn.textContent = 'Submit My Selections →';
+
+      if (errorMsg) {
+        alert(`Could not save all selections: ${errorMsg}`);
+      }
+    }
+
+    function clearAllPending() {
+      // Restore each pending cell back to an open signup button
+      for (const sel of pendingSelections) {
+        const cell = sel.cell;
+        if (!cell) continue;
+        cell.className = 'slot-cell';
+        cell.innerHTML = `<button class="signup-btn" onclick="openSignup(this)"
+          data-slot-id="${sel.slotId}"
+          data-round="${sel.round || ''}"
+          data-date="${sel.date || ''}"
+          data-time="${sel.time || ''}"
+          data-station="${sel.station || ''}"
+          data-club="${sel.club || 'any'}"
+          data-grades="${sel.gradesRaw.replace(/"/g, '&quot;')}">+ Add player</button>`;
+        // Restore badge
+        const panel = cell.closest('.game-panel');
+        if (panel) {
+          const remaining = panel.querySelectorAll('.signup-btn').length;
+          const tab   = document.querySelector(`.tab-btn[data-tab="${panel.dataset.panel}"]`);
+          const badge = tab?.querySelector('.tab-spots');
+          if (badge) { badge.textContent = `${remaining} open`; badge.classList.remove('full'); }
+          const statPill = panel.querySelector('.stat-red,.stat-green');
+          if (statPill) { statPill.className = 'stat-pill stat-red'; statPill.textContent = `${remaining} spots open`; }
+        }
+      }
+      pendingSelections = [];
+      updateSubmitBar();
+    }
+
+    window.addEventListener('beforeunload', e => {
+      if (pendingSelections.length > 0) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved shift selections — click "Submit My Selections" to save them.';
+      }
+    });
+
+    // Highlight slots from this browser on page load
+    const mine = getMine();
+    mine.forEach(id => {
+      document.querySelector(`.slot-filled[data-slot-id="${id}"]`)?.classList.add('slot-mine');
+    });
+
+    // ── Modal ─────────────────────────────────────────────────
+    let activeSlotId = null, activeBtn = null;
+
+    // When player dropdown changes
+    function onPlayerSelect(sel) {
+      const manualWrap = document.getElementById('manual-name-wrap');
+      if (sel.value === '__manual') {
+        manualWrap.style.display = '';
+        setTimeout(() => document.getElementById('vol-name')?.focus(), 30);
+      } else {
+        manualWrap.style.display = 'none';
+        document.getElementById('vol-name').value = '';
+      }
+    }
+
+    function openSignup(btn) {
+      activeSlotId = btn.dataset.slotId;
+      activeBtn    = btn;
+      document.getElementById('active-slot-id').value = activeSlotId;
+      document.getElementById('modal-eyebrow').textContent    = `Round ${btn.dataset.round} · ${btn.dataset.date}`;
+      document.getElementById('modal-title-text').textContent = btn.dataset.station;
+      document.getElementById('modal-context').textContent    = `${fmtTime(btn.dataset.time)} shift`;
+
+      // Eligibility badge
+      const club   = btn.dataset.club   ?? 'any';
+      const grades = JSON.parse(btn.dataset.grades ?? '[]');
+      const badgeEl = document.getElementById('slot-eligibility-badge');
+      if (club !== 'any' || grades.length > 0) {
+        const clubLabel = club === 'football' ? '🏉 Football' : club === 'netball' ? '🏐 Netball' : '';
+        const gradeStr  = grades.length > 0 ? grades.join(' · ') : '';
+        badgeEl.textContent = [clubLabel, gradeStr].filter(Boolean).join(' — ');
+        badgeEl.style.display = '';
+      } else {
+        badgeEl.style.display = 'none';
+      }
+
+      // Build player dropdown
+      const eligible = __players.filter(p => {
+        const clubOk  = club === 'any' || p.c === club;
+        const gradeOk = grades.length === 0 || grades.includes(p.g);
+        return clubOk && gradeOk;
+      });
+
+      const sel = document.getElementById('player-select');
+      sel.innerHTML = '<option value="">— Choose a player —</option>';
+
+      if (eligible.length > 0) {
+        // Group by grade
+        const byGrade = {};
+        for (const p of eligible) {
+          if (!byGrade[p.g]) byGrade[p.g] = [];
+          byGrade[p.g].push(p);
+        }
+        for (const [grade, players] of Object.entries(byGrade)) {
+          const og = document.createElement('optgroup');
+          og.label = grade;
+          for (const p of players) {
+            const opt = document.createElement('option');
+            opt.value       = p.n;
+            opt.textContent = p.n;
+            og.appendChild(opt);
+          }
+          sel.appendChild(og);
+        }
+      }
+
+      // Always offer a manual fallback
+      const manualOpt = document.createElement('option');
+      manualOpt.value       = '__manual';
+      manualOpt.textContent = eligible.length > 0 ? 'Not listed — type manually…' : 'Type name manually…';
+      sel.appendChild(manualOpt);
+
+      sel.value = '';
+      document.getElementById('manual-name-wrap').style.display = 'none';
+      document.getElementById('vol-name').value  = '';
+      document.getElementById('vol-phone').value = '';
+
+      const sb = document.getElementById('submit-btn');
+      sb.disabled = false; sb.textContent = 'Add to My Selections';
+      document.getElementById('signup-modal').classList.add('open');
+      setTimeout(() => sel?.focus(), 60);
+    }
+
+    function closeModal() {
+      document.getElementById('signup-modal').classList.remove('open');
+      activeSlotId = null; activeBtn = null;
+    }
+
+    document.getElementById('signup-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    function submitSignup(e) {
+      e.preventDefault();
+      const sel      = document.getElementById('player-select');
+      const isManual = sel.value === '__manual';
+      const name     = isManual
+        ? document.getElementById('vol-name').value.trim()
+        : sel.value;
+      const phone = document.getElementById('vol-phone').value.trim();
+
+      // Grade comes from player data if dropdown selection
+      const playerData = !isManual ? __players.find(p => p.n === name) : null;
+      const grade = playerData?.g ?? '';
+
+      if (!name) {
+        if (isManual) document.getElementById('vol-name').focus();
+        else          sel.focus();
+        return;
+      }
+
+      // Add to pending (no API call yet)
+      const cell = activeBtn?.closest('.slot-cell');
+      pendingSelections.push({
+        slotId:    activeSlotId,
+        name,
+        phone,
+        grade,
+        round:     activeBtn?.dataset.round   || '',
+        date:      activeBtn?.dataset.date    || '',
+        time:      activeBtn?.dataset.time    || '',
+        station:   activeBtn?.dataset.station || '',
+        club:      activeBtn?.dataset.club    || 'any',
+        gradesRaw: activeBtn?.dataset.grades  || '[]',
+        cell,
+      });
+
+      // Show amber "Pending" state in the roster cell
+      if (cell) {
+        cell.className = 'slot-cell slot-pending-cell';
+        cell.innerHTML = `
+          <div class="slot-pending">
+            <div class="pending-dot"></div>
+            <div class="pending-name">${name}</div>
+            <div class="pending-label">Pending — not saved</div>
+          </div>
+        `;
+        // Update tab badge count (pending slots are no longer "open")
+        const panel = cell.closest('.game-panel');
+        if (panel) {
+          const remaining = panel.querySelectorAll('.signup-btn').length;
+          const tab   = document.querySelector(`.tab-btn[data-tab="${panel.dataset.panel}"]`);
+          const badge = tab?.querySelector('.tab-spots');
+          if (badge) {
+            if (remaining === 0) { badge.textContent = '✓ Full'; badge.classList.add('full'); }
+            else { badge.textContent = `${remaining} open`; badge.classList.remove('full'); }
+          }
+        }
+      }
+
+      updateSubmitBar();
+      closeModal();
+    }
+
+    window.switchTab       = switchTab;
+    window.openSignup      = openSignup;
+    window.closeModal      = closeModal;
+    window.submitSignup    = submitSignup;
+    window.onPlayerSelect  = onPlayerSelect;
+    window.submitAllPending = submitAllPending;
+    window.clearAllPending  = clearAllPending;
+
+    // ── Helper: format time-slot string "9.30-11.30" → "9:30 – 11:30" ──
+    function fmtTime(ts) {
+      return ts.replace(/\./g, ':').replace('-', ' – ');
+    }
+
+    // ── Open from a filled slot cell ──────────────────────────
+    function openShiftChange(el) {
+      openCoordinator({
+        slotMode:    true,
+        slotId:      el.dataset.slotId,
+        gameDay:     `Round ${el.dataset.round} – ${el.dataset.date}`,
+        timeSlot:    fmtTime(el.dataset.time),
+        station:     el.dataset.station || '',
+        currentName: el.dataset.vol || '',
+      });
+    }
+
+    // ── Coordinator modal ─────────────────────────────────────
+    // opts.slotMode = true  → show shift summary card, hide dropdowns
+    // opts.slotMode = false → show dropdowns (generic mode from header link)
+    function openCoordinator(opts = {}) {
+      const slotMode = !!opts.slotMode;
+
+      // Reset fields
+      document.getElementById('coord-name').value    = '';
+      document.getElementById('coord-phone').value   = '';
+      document.getElementById('coord-message').value = '';
+      document.querySelectorAll('[name="coord-reqtype"]').forEach(r => r.checked = false);
+
+      if (slotMode) {
+        // Populate hidden values for submission
+        document.getElementById('coord-slot-id').value   = opts.slotId   || '';
+        document.getElementById('coord-gameday').value   = opts.gameDay  || '';
+        document.getElementById('coord-timeslot').value  = opts.timeSlot || '';
+        document.getElementById('coord-station').value   = opts.station  || '';
+
+        // Populate summary card
+        document.getElementById('coord-sum-gameday').textContent = opts.gameDay  || '';
+        document.getElementById('coord-sum-time').textContent    = opts.timeSlot || '';
+        const stEl = document.getElementById('coord-sum-station');
+        if (opts.station) { stEl.textContent = opts.station; stEl.style.display = ''; }
+        else              { stEl.style.display = 'none'; }
+        const curEl = document.getElementById('coord-sum-current');
+        curEl.textContent = opts.currentName ? `Currently signed up: ${opts.currentName}` : '';
+        curEl.style.display = opts.currentName ? '' : 'none';
+
+        document.getElementById('coord-shift-summary').style.display = '';
+        document.getElementById('coord-shift-selects').style.display = 'none';
+        document.getElementById('coord-modal-title').textContent   = 'Change or Remove Shift';
+        document.getElementById('coord-modal-context').textContent = 'Choose what you need and the coordinator will sort it out.';
+      } else {
+        // Generic mode — show dropdowns, clear values
+        document.getElementById('coord-slot-id').value   = '';
+        document.getElementById('coord-gameday').value   = '';
+        document.getElementById('coord-timeslot').value  = '';
+        document.getElementById('coord-station').value   = '';
+        document.getElementById('coord-shift-summary').style.display = 'none';
+        document.getElementById('coord-shift-selects').style.display = '';
+        document.getElementById('coord-modal-title').textContent   = 'Contact Coordinator';
+        document.getElementById('coord-modal-context').textContent = 'Select your shift and leave a message — the coordinator will be in touch.';
+      }
+
+      document.getElementById('coord-form-wrap').style.display = '';
+      document.getElementById('coord-success').style.display   = 'none';
+      const sb = document.getElementById('coord-submit-btn');
+      sb.disabled = false; sb.textContent = 'Send to Coordinator';
+      document.getElementById('coordinator-modal').classList.add('open');
+      setTimeout(() => document.getElementById('coord-name')?.focus(), 60);
+    }
+
+    function closeCoordinator() {
+      document.getElementById('coordinator-modal').classList.remove('open');
+    }
+
+    document.getElementById('coordinator-modal').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeCoordinator();
+    });
+
+    async function submitCoordinator(e) {
+      e.preventDefault();
+      const slotMode  = document.getElementById('coord-shift-selects').style.display === 'none';
+      const name      = document.getElementById('coord-name').value.trim();
+      const phone     = document.getElementById('coord-phone').value.trim();
+      const gameDay   = document.getElementById('coord-gameday').value.trim();
+      const timeSlot  = document.getElementById('coord-timeslot').value.trim();
+      const station   = document.getElementById('coord-station').value.trim();
+      const slotId    = document.getElementById('coord-slot-id').value.trim() || null;
+      const reqType   = document.querySelector('[name="coord-reqtype"]:checked')?.value;
+      const message   = document.getElementById('coord-message').value.trim();
+
+      // Validate
+      if (!name || !message || !reqType) {
+        if (!reqType) alert('Please select what you need (change or remove).');
+        return;
+      }
+      if (!slotMode && (!gameDay || !timeSlot)) {
+        alert('Please select the game day and time slot.');
+        return;
+      }
+
+      const sb = document.getElementById('coord-submit-btn');
+      sb.disabled = true; sb.textContent = 'Sending…';
+
+      try {
+        const res  = await fetch('/api/canteen/contact-coordinator', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name, phone,
+            game_day:     gameDay   || null,
+            time_slot:    timeSlot  || null,
+            station:      station   || null,
+            slot_id:      slotId,
+            request_type: reqType,
+            message,
+          }),
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          alert(data.error ?? 'Something went wrong. Please try again.');
+          sb.disabled = false; sb.textContent = 'Send to Coordinator';
+          return;
+        }
+
+        document.getElementById('coord-form-wrap').style.display = 'none';
+        document.getElementById('coord-success').style.display   = 'block';
+        setTimeout(closeCoordinator, 3500);
+      } catch {
+        alert('Network error — please try again.');
+        sb.disabled = false; sb.textContent = 'Send to Coordinator';
+      }
+    }
+
+    window.openShiftChange   = openShiftChange;
+    window.openCoordinator   = openCoordinator;
+    window.closeCoordinator  = closeCoordinator;
+    window.submitCoordinator = submitCoordinator;
+  </script>
+</body>
+</html>

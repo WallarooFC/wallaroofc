@@ -1,10 +1,19 @@
-# Wallaroo FC Secretary Portal
+# Wallaroo FC — monorepo
 
-Production portal for the Wallaroo Football Club Secretary. Deployed as a separate Next.js app at `portal.wallaroofc.com`, sitting alongside the public Wix site at `wallaroofc.com`.
+| App | Path | Stack | URL |
+|-----|------|-------|-----|
+| Public website | `public/` | Astro 6 · Supabase · Vercel | wallaroofc.com |
+| Secretary portal | `portal/` | Next.js 15 · Supabase · Vercel | portal.wallaroofc.com |
 
-The single v1 user is the Club Secretary. The portal replaces a sprawl of spreadsheets, manual PlayHQ-email-to-jumper workflows, and ad-hoc roster wrangling.
+Both apps share the same Supabase project (`linaudktxwrqelngffol`). Migrations live in `supabase/migrations/`.
 
-## Stack
+---
+
+## Secretary portal (`portal/`)
+
+Production portal for the Wallaroo Football Club Secretary. The portal replaces a sprawl of spreadsheets, manual PlayHQ-email-to-jumper workflows, and ad-hoc roster wrangling.
+
+### Portal stack
 
 - Next.js 15 (App Router, React Server Components, TypeScript strict)
 - Tailwind CSS v4 + shadcn/ui
@@ -14,15 +23,29 @@ The single v1 user is the Club Secretary. The portal replaces a sprawl of spread
 - Vitest + React Testing Library for unit tests; Playwright for E2E
 - pnpm
 
-## Getting started
+### Getting started
 
 ```bash
+cd portal
 pnpm install
 cp .env.local.example .env.local   # fill in real values
 pnpm dev
 ```
 
 Visit http://localhost:3000.
+
+## Public website (`public/`)
+
+Astro 6 SSR site for wallaroofc.com — club homepage, fixtures, results, ladders, sponsors, admin portal.
+
+```bash
+cd public
+npm install
+cp .env.example .env.local   # fill in real values
+npm run dev
+```
+
+Visit http://localhost:4321.
 
 ## Scripts
 

@@ -1,0 +1,844 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const admin = getAdminClient();
+
+const { data: gameDays } = await admin
+  .from('canteen_game_days')
+  .select('id, round, match_date, active')
+  .eq('season', 2026)
+  .order('match_date');
+
+const { data: allSlots } = await admin
+  .from('canteen_slots')
+  .select('*')
+  .order('slot_order')
+  .order('sort_order');
+
+const days = (gameDays ?? []).map(gd => {
+  const slots   = (allSlots ?? []).filter(s => s.game_day_id === gd.id);
+  const filled  = slots.filter(s => s.volunteer_name && !s.no_fill).length;
+  const needed  = slots.filter(s => !s.volunteer_name && !s.no_fill).length;
+  const nofill  = slots.filter(s => s.no_fill).length;
+  const dt      = new Date(gd.match_date + 'T00:00:00');
+  const byKey: Record<string, any> = {};
+  for (const s of slots) byKey[`${s.time_slot}|${s.station}|${s.station_index}`] = s;
+  return {
+    ...gd,
+    label:   dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+    dayName: dt.toLocaleDateString('en-AU', { weekday: 'short' }),
+    slots, filled, needed, nofill, byKey,
+  };
+});
+
+const today    = new Date(); today.setHours(0,0,0,0);
+const defaultIdx = Math.max(0, days.findIndex(d => new Date(d.match_date) >= today));
+
+const totalFilled = days.reduce((a, d) => a + d.filled, 0);
+const totalNeeded = days.reduce((a, d) => a + d.needed, 0);
+const totalSlots  = days.reduce((a, d) => a + d.slots.filter(s => !s.no_fill).length, 0);
+
+const STATIONS = [
+  { station: 'Till',            index: 1, label: 'Till' },
+  { station: 'Serving',         index: 1, label: 'Serving' },
+  { station: 'Serving',         index: 2, label: 'Serving' },
+  { station: 'Hot Chips',       index: 1, label: 'Hot Chips' },
+  { station: 'Hot Chips',       index: 2, label: 'Hot Chips' },
+  { station: 'Coffee/Pastries', index: 1, label: 'Coffee & Pastries' },
+  { station: 'Hot Dogs',        index: 1, label: 'Hot Dogs' },
+  { station: 'Hot Dogs',        index: 2, label: 'Hot Dogs' },
+  { station: 'Chicken Burgers', index: 1, label: 'Chicken Burgers' },
+];
+const TIME_SLOTS = ['9.30-11.30', '11.30-1.30', '1.30-3.30'];
+
+const publicUrl = '/canteen/';
+
+// ── Players + canteen-count lookup ────────────────────────────────────────────
+const { data: allPlayers } = await admin
+  .from('players')
+  .select('id, full_name, first_name, last_name, grade, emergency_name, playhq_data')
+  .eq('season', 2026)
+  .order('last_name')
+  .order('first_name');
+
+const TEAM_GRADES = ['A-Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'U11', 'U9'];
+const NETBALL_GRADES = ['A Grade Netball', 'B Grade Netball', 'U17 Netball', 'U15 Netball', 'U13 Netball', 'U11 Netball', 'U9 Netball'];
+
+// ── Shift rules ──────────────────────────────────────────────────────────────
+const { data: shiftRules } = await admin.from('canteen_shift_rules').select('*');
+const ruleBySlot: Record<string, { club: string; eligible_grades: string[] }> = {};
+for (const r of shiftRules ?? []) ruleBySlot[r.time_slot] = r;
+
+// All grades that appear in the player registry + standard grade list
+const allPlayerGrades = [...new Set((allPlayers ?? []).map(p => p.grade).filter(Boolean))];
+const ALL_GRADES = [...new Set([...TEAM_GRADES, ...allPlayerGrades, ...NETBALL_GRADES])];
+
+// Build a map: every known parent/guardian name → player id
+// Sources: emergency_name (stored on all players), plus parent1_name / parent2_name
+// stored in playhq_data after a CSV re-import.
+function normName(s: string | null | undefined): string {
+  return (s ?? '').trim().toLowerCase();
+}
+const nameToPlayerId: Record<string, string> = {};
+for (const p of allPlayers ?? []) {
+  const names: string[] = [
+    p.full_name,                            // player themselves (adult grades)
+    p.emergency_name,                       // emergency contact (usually a parent)
+    (p.playhq_data as any)?.parent1_name,   // parent 1 — populated after re-import
+    (p.playhq_data as any)?.parent2_name,   // parent 2 — populated after re-import
+  ];
+  for (const n of names) {
+    const key = normName(n);
+    if (key) nameToPlayerId[key] = p.id;
+  }
+}
+
+// Count canteen shifts per player id (via any of their parent/own names)
+const seasonSlots = days.flatMap(d => d.slots);
+const canteenCounts: Record<string, number> = {};   // keyed by player.id
+for (const slot of seasonSlots) {
+  if (slot.volunteer_name && !slot.no_fill) {
+    const volunteerId = nameToPlayerId[normName(slot.volunteer_name)];
+    if (volunteerId) {
+      canteenCounts[volunteerId] = (canteenCounts[volunteerId] ?? 0) + 1;
+    }
+  }
+}
+
+// Group players by grade
+const playersByGrade: Record<string, typeof allPlayers[0][]> = {};
+for (const grade of TEAM_GRADES) {
+  playersByGrade[grade] = (allPlayers ?? []).filter(p => p.grade === grade);
+}
+
+// Compact player list for client-side picker (name + grade only)
+const playersForJs = JSON.stringify(
+  (allPlayers ?? []).map(p => ({ name: p.full_name, grade: p.grade }))
+);
+---
+<AdminLayout title="Canteen Roster">
+<style>
+  /* ── Stats ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 18px 20px; }
+  .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--admin-muted); margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--admin-text); line-height: 1; }
+  .stat-value.green  { color: #4ade80; }
+  .stat-value.orange { color: #fb923c; }
+  .stat-value.red    { color: #f87171; }
+
+  /* ── Top actions ── */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+  .btn-red  { background: var(--admin-red); color: #fff; }
+  .btn-red:hover { background: #a50e25; }
+  .btn-ghost { background: transparent; border: 1px solid var(--admin-border); color: var(--admin-muted); }
+  .btn-ghost:hover { border-color: var(--admin-text); color: var(--admin-text); }
+  .public-link { font-size: 12px; color: var(--admin-muted); display: flex; align-items: center; gap: 8px; }
+  .public-link a { color: #60a5fa; }
+  .copy-btn { background: none; border: 1px solid var(--admin-border); color: var(--admin-muted); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+  .copy-btn:hover { color: var(--admin-text); }
+
+  /* ── Date tabs ── */
+  .tabs-wrap { background: rgba(0,0,0,0.2); border-radius: 8px 8px 0 0; border: 1px solid var(--admin-border); border-bottom: none; overflow: hidden; }
+  .tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    padding: 10px 16px 9px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--admin-muted); border-bottom: 2px solid transparent; transition: all 0.15s;
+    font-size: 12px;
+  }
+  .tab-btn:hover { color: var(--admin-text); background: rgba(255,255,255,0.03); }
+  .tab-btn.active { color: var(--admin-text); border-bottom-color: var(--admin-red); background: rgba(200,16,46,0.08); }
+  .tab-btn.inactive-day { opacity: 0.5; }
+  .tab-date { font-size: 14px; font-weight: 700; }
+  .tab-round { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .tab-badge {
+    font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 99px; margin-top: 1px;
+    background: rgba(200,16,46,0.25); color: #fca5a5;
+  }
+  .tab-badge.full   { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .tab-badge.inactive { background: rgba(255,255,255,0.08); color: var(--admin-muted); }
+
+  /* ── Grid ── */
+  .panel-wrap { display: none; background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 0 0 8px 8px; }
+  .panel-wrap.active { display: block; }
+  .panel-meta { padding: 14px 20px; border-bottom: 1px solid var(--admin-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .panel-title { font-size: 14px; font-weight: 600; color: var(--admin-text); }
+  .panel-actions { display: flex; gap: 8px; align-items: center; }
+  .toggle-active-btn { font-size: 11px; padding: 4px 10px; border-radius: 4px; border: 1px solid; cursor: pointer; transition: all 0.15s; background: none; }
+  .toggle-active-btn.is-active { border-color: #4ade80; color: #4ade80; }
+  .toggle-active-btn.is-active:hover { background: rgba(74,222,128,0.1); }
+  .toggle-active-btn.is-inactive { border-color: var(--admin-border); color: var(--admin-muted); }
+  .toggle-active-btn.is-inactive:hover { border-color: var(--admin-text); color: var(--admin-text); }
+
+  .roster-scroll { overflow-x: auto; }
+  table.roster { width: 100%; border-collapse: collapse; min-width: 900px; font-size: 12px; }
+  table.roster thead th {
+    background: rgba(0,0,0,0.3); color: var(--admin-muted); font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 9px 8px; text-align: center;
+    border-right: 1px solid var(--admin-border); white-space: nowrap;
+  }
+  table.roster thead th:first-child { text-align: left; padding-left: 16px; min-width: 80px; border-right: 2px solid var(--admin-border); }
+  table.roster thead th:last-child { border-right: none; }
+  table.roster tbody tr { border-bottom: 1px solid var(--admin-border); }
+  table.roster tbody tr:last-child { border-bottom: none; }
+  table.roster tbody tr:nth-child(odd) { background: rgba(255,255,255,0.015); }
+  table.roster tbody td { border-right: 1px solid var(--admin-border); padding: 0; vertical-align: middle; }
+  table.roster tbody td:first-child { border-right: 2px solid var(--admin-border); background: rgba(0,0,0,0.15); }
+  table.roster tbody td:last-child { border-right: none; }
+
+  .time-label { padding: 10px 8px 10px 14px; }
+  .time-main { font-size: 14px; font-weight: 700; color: var(--admin-text); display: block; }
+  .time-end  { font-size: 10px; color: var(--admin-muted); }
+
+  .slot-cell { padding: 6px 5px; min-height: 60px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+
+  /* filled */
+  .vol-card { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); border-radius: 5px; padding: 5px 6px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .vol-name { font-size: 12px; font-weight: 600; color: #d1fae5; }
+  .vol-meta { font-size: 10px; color: rgba(255,255,255,0.4); }
+  .slot-actions { display: flex; gap: 3px; }
+  .slot-act-btn { flex: 1; font-size: 9px; padding: 3px 4px; border-radius: 3px; cursor: pointer; border: none; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; transition: 0.15s; }
+  .slot-act-clear { background: rgba(239,68,68,0.15); color: #f87171; }
+  .slot-act-clear:hover { background: rgba(239,68,68,0.3); }
+  .slot-act-edit { background: rgba(255,255,255,0.06); color: var(--admin-muted); }
+  .slot-act-edit:hover { background: rgba(255,255,255,0.12); color: var(--admin-text); }
+
+  /* empty */
+  .slot-empty-cell { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .add-vol-btn {
+    flex: 1; background: none; border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 5px; cursor: pointer; padding: 6px;
+    font-size: 10px; color: rgba(255,255,255,0.25); letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 4px; transition: 0.15s;
+  }
+  .add-vol-btn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); }
+  .nofill-toggle { font-size: 9px; padding: 2px 6px; background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.2); letter-spacing: 0.06em; text-align: center; }
+  .nofill-toggle:hover { color: rgba(255,255,255,0.5); }
+
+  /* no fill */
+  .slot-nofill-cell {
+    flex: 1; background: rgba(0,0,0,0.25); border-radius: 5px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    padding: 4px;
+  }
+  .nofill-label { font-size: 9px; color: rgba(255,255,255,0.2); letter-spacing: 0.08em; text-transform: uppercase; }
+  .enable-toggle { font-size: 9px; padding: 2px 6px; background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.2); letter-spacing: 0.06em; }
+  .enable-toggle:hover { color: rgba(255,255,255,0.5); }
+
+  /* ── Modals ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 999; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 10px; padding: 28px; width: 100%; max-width: 400px; position: relative; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+  .modal h3 { font-size: 18px; font-weight: 700; color: var(--admin-text); margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--admin-muted); margin-bottom: 20px; }
+  .modal-close { position: absolute; top: 14px; right: 14px; background: none; border: none; cursor: pointer; font-size: 18px; color: var(--admin-muted); padding: 4px 8px; }
+  .form-row { margin-bottom: 14px; }
+  .form-row label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--admin-muted); margin-bottom: 5px; }
+  .form-row input, .form-row select {
+    width: 100%; padding: 9px 12px; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--admin-border); border-radius: 6px; font-size: 14px;
+    color: var(--admin-text); outline: none; transition: border-color 0.2s;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: var(--admin-red); }
+  .form-row select option { background: #0D1B2E; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-modal-cancel { flex: 1; padding: 10px; background: none; border: 1px solid var(--admin-border); border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--admin-muted); }
+  .btn-modal-cancel:hover { border-color: var(--admin-text); color: var(--admin-text); }
+  .btn-modal-save { flex: 2; padding: 10px; background: var(--admin-red); border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 700; color: #fff; }
+  .btn-modal-save:disabled { background: #444; cursor: not-allowed; }
+
+  @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+
+  /* ── Player picker ── */
+  .player-search-input {
+    width: 100%; padding: 9px 12px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--admin-border);
+    border-radius: 6px 6px 0 0; font-size: 14px; color: var(--admin-text); outline: none;
+    transition: border-color 0.2s;
+  }
+  .player-search-input:focus { border-color: var(--admin-red); }
+  .player-pick-select {
+    width: 100%; height: 160px; padding: 4px 0;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--admin-border);
+    border-top: none; border-radius: 0 0 6px 6px; font-size: 13px;
+    color: var(--admin-text); outline: none; transition: border-color 0.2s;
+  }
+  .player-pick-select:focus { border-color: var(--admin-red); }
+  .player-pick-select option { padding: 5px 10px; background: #0D1B2E; }
+  .player-pick-select optgroup { color: var(--admin-muted); font-size: 11px; letter-spacing: 0.1em; }
+  .grade-chip-row { margin: 8px 0 14px; min-height: 24px; }
+  .grade-chip {
+    display: inline-block; padding: 3px 12px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    background: rgba(200,16,46,0.15); color: #fca5a5; border: 1px solid rgba(200,16,46,0.3);
+  }
+  .picker-hint { font-size: 11px; color: var(--admin-muted); margin-top: 4px; }
+
+  /* ── Shift rules section ── */
+  .rules-section { margin-top: 48px; }
+  .rules-heading { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .rules-sub { font-size: 13px; color: var(--admin-muted); margin-bottom: 24px; line-height: 1.5; }
+  .rules-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .rule-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 20px; }
+  .rule-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.04em; color: var(--admin-text); margin-bottom: 4px; }
+  .rule-card-sub { font-size: 11px; color: var(--admin-muted); margin-bottom: 16px; }
+  .rule-field-label { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--admin-muted); margin-bottom: 8px; display: block; }
+  .club-radios { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+  .club-radio-opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--admin-text); cursor: pointer; }
+  .club-radio-opt input { accent-color: var(--admin-red); cursor: pointer; }
+  .grade-checks { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; margin-bottom: 18px; }
+  .grade-check-opt { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--admin-text); cursor: pointer; padding: 2px 0; }
+  .grade-check-opt input { accent-color: var(--admin-red); cursor: pointer; }
+  .rule-save-btn { width: 100%; padding: 9px; background: var(--admin-red); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; transition: 0.15s; }
+  .rule-save-btn:hover { background: #a50e25; }
+  .rule-save-btn:disabled { background: #444; cursor: not-allowed; }
+  .rule-status { font-size: 11px; color: #4ade80; margin-top: 8px; min-height: 16px; text-align: center; }
+  @media (max-width: 900px) { .rules-grid { grid-template-columns: 1fr; } }
+
+  /* ── Allocation section ── */
+  .allocation-section { margin-top: 48px; }
+  .allocation-heading { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .allocation-sub { font-size: 13px; color: var(--admin-muted); margin-bottom: 24px; }
+  .team-blocks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .team-block { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; overflow: hidden; }
+  .team-block-head { padding: 12px 16px; background: rgba(0,0,0,0.25); border-bottom: 1px solid var(--admin-border); display: flex; align-items: center; justify-content: space-between; }
+  .team-block-head h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--admin-text); }
+  .team-player-count { font-size: 11px; color: var(--admin-muted); }
+  .player-roster { padding: 8px 0; }
+  .player-row { display: flex; align-items: center; padding: 5px 16px; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .player-row:last-child { border-bottom: none; }
+  .player-name { flex: 1; font-size: 13px; color: var(--admin-text); padding: 4px 8px; border-radius: 4px; }
+  .player-name.under-quota { background: rgba(180, 30, 50, 0.45); color: #fca5a5; }
+  .canteen-count-box { width: 32px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 5px; font-size: 14px; font-weight: 700; flex-shrink: 0; background: rgba(255,255,255,0.06); color: var(--admin-text); border: 1px solid var(--admin-border); }
+  .canteen-count-box.zero { color: var(--admin-muted); }
+  .canteen-count-box.ok   { background: rgba(74,222,128,0.1); color: #4ade80; border-color: rgba(74,222,128,0.2); }
+  .allocation-legend { display: flex; align-items: center; gap: 20px; margin-bottom: 16px; font-size: 12px; color: var(--admin-muted); }
+  .legend-swatch-red { width: 12px; height: 12px; border-radius: 2px; background: rgba(180,30,50,0.45); border: 1px solid rgba(252,165,165,0.3); display: inline-block; }
+  .legend-swatch-green { width: 12px; height: 12px; border-radius: 2px; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.2); display: inline-block; }
+  .team-empty { padding: 12px 16px; font-size: 12px; color: var(--admin-muted); font-style: italic; }
+  @media (max-width: 1100px) { .team-blocks { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 700px)  { .team-blocks { grid-template-columns: 1fr; } }
+</style>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-label">Game Days</div>
+    <div class="stat-value">{days.length}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Spots</div>
+    <div class="stat-value">{totalSlots}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Filled</div>
+    <div class="stat-value green">{totalFilled}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Still Needed</div>
+    <div class={`stat-value${totalNeeded > 0 ? ' orange' : ' green'}`}>{totalNeeded}</div>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div class="top-bar">
+  <div class="top-bar-left">
+    <button class="btn btn-red" onclick="document.getElementById('add-day-modal').classList.add('open')">
+      + Add Game Day
+    </button>
+    <span class="public-link">
+      Public link:
+      <a href={publicUrl} target="_blank">{publicUrl}</a>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/canteen/').then(()=>this.textContent='Copied!').catch(()=>{})">Copy</button>
+    </span>
+  </div>
+</div>
+
+<!-- Tabs + panels -->
+<div class="tabs-wrap">
+  <div class="tabs">
+    {days.map((d, i) => (
+      <button
+        class={`tab-btn${i === defaultIdx ? ' active' : ''}${!d.active ? ' inactive-day' : ''}`}
+        data-tab={i} onclick="switchTab(this)"
+      >
+        <span class="tab-round">Rd {d.round}</span>
+        <span class="tab-date">{d.label}</span>
+        {!d.active
+          ? <span class="tab-badge inactive">Hidden</span>
+          : d.needed === 0
+            ? <span class="tab-badge full">Full</span>
+            : <span class="tab-badge">{d.needed} open</span>
+        }
+      </button>
+    ))}
+  </div>
+</div>
+
+{days.map((d, i) => {
+  return (
+    <div class={`panel-wrap${i === defaultIdx ? ' active' : ''}`} data-panel={i}>
+      <div class="panel-meta">
+        <div class="panel-title">
+          Round {d.round} · {d.dayName} {d.label} &nbsp;
+          <span style="font-weight:400;font-size:12px;color:var(--admin-muted)">
+            {d.filled}/{d.filled + d.needed} filled
+          </span>
+        </div>
+        <div class="panel-actions">
+          <button
+            class={`toggle-active-btn ${d.active ? 'is-active' : 'is-inactive'}`}
+            data-gd-id={d.id}
+            onclick="toggleGameDay(this)"
+          >
+            {d.active ? '● Visible to public' : '○ Hidden from public'}
+          </button>
+        </div>
+      </div>
+
+      <div class="roster-scroll">
+        <table class="roster">
+          <thead>
+            <tr>
+              <th>Time</th>
+              {STATIONS.map(st => <th>{st.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {TIME_SLOTS.map(ts => {
+              const [start, end] = ts.split('-');
+              return (
+                <tr>
+                  <td>
+                    <div class="time-label">
+                      <span class="time-main">{start}</span>
+                      <span class="time-end">– {end}</span>
+                    </div>
+                  </td>
+                  {STATIONS.map(st => {
+                    const slot = d.byKey[`${ts}|${st.station}|${st.index}`];
+                    if (!slot) return <td><div class="slot-cell"><div class="slot-nofill-cell"><span class="nofill-label">N/A</span></div></div></td>;
+
+                    if (slot.no_fill) {
+                      return (
+                        <td>
+                          <div class="slot-cell">
+                            <div class="slot-nofill-cell">
+                              <span class="nofill-label">No fill</span>
+                              <button class="enable-toggle" onclick={`toggleNoFill('${slot.id}', this)`}>Enable</button>
+                            </div>
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    if (slot.volunteer_name) {
+                      return (
+                        <td>
+                          <div class="slot-cell" data-slot-id={slot.id}>
+                            <div class="vol-card">
+                              <div class="vol-name">{slot.volunteer_name}</div>
+                              {(slot.volunteer_grade || slot.volunteer_phone) &&
+                                <div class="vol-meta">
+                                  {[slot.volunteer_grade, slot.volunteer_phone].filter(Boolean).join(' · ')}
+                                </div>
+                              }
+                            </div>
+                            <div class="slot-actions">
+                              <button class="slot-act-btn slot-act-clear" onclick={`clearSlot('${slot.id}', this)`}>Remove</button>
+                              <button class="slot-act-btn slot-act-edit" onclick={`openEdit('${slot.id}','${slot.volunteer_name}','${slot.volunteer_phone??''}','${slot.volunteer_grade??''}', this)`}>Edit</button>
+                            </div>
+                          </div>
+                        </td>
+                      );
+                    }
+
+                    return (
+                      <td>
+                        <div class="slot-cell">
+                          <div class="slot-empty-cell">
+                            <button class="add-vol-btn" onclick={`openFill('${slot.id}', this)`}>
+                              + Add volunteer
+                            </button>
+                            <button class="nofill-toggle" onclick={`toggleNoFill('${slot.id}', this)`}>Set no-fill</button>
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+})}
+
+<!-- ── Shift Team Restrictions ───────────────────────────────────────────── -->
+<div class="rules-section">
+  <h2 class="rules-heading">Shift Team Restrictions</h2>
+  <p class="rules-sub">
+    Set which club and grades are eligible to fill each time slot.
+    Clicking <strong>Save & Apply</strong> updates all existing game days immediately and
+    becomes the default for any new game days added.
+  </p>
+
+  <div class="rules-grid">
+    {TIME_SLOTS.map(ts => {
+      const [start, end] = ts.split('-');
+      const rule = ruleBySlot[ts] ?? { club: 'any', eligible_grades: [] };
+      return (
+        <div class="rule-card" data-timeslot={ts}>
+          <div class="rule-card-title">{start} – {end}</div>
+          <div class="rule-card-sub">time slot restriction</div>
+
+          <span class="rule-field-label">Club</span>
+          <div class="club-radios">
+            {(['any','football','netball'] as const).map(c => (
+              <label class="club-radio-opt">
+                <input type="radio" name={`club-${ts}`} value={c} checked={rule.club === c} />
+                {c === 'any' ? 'Any club' : c === 'football' ? '🏉 Football only' : '🏐 Netball only'}
+              </label>
+            ))}
+          </div>
+
+          <span class="rule-field-label">Eligible grades <span style="font-weight:400;text-transform:none;letter-spacing:0">(tick all that apply)</span></span>
+          <div class="grade-checks">
+            {ALL_GRADES.map(g => (
+              <label class="grade-check-opt">
+                <input type="checkbox" name={`grade-${ts}`} value={g} checked={(rule.eligible_grades ?? []).includes(g)} />
+                {g}
+              </label>
+            ))}
+          </div>
+
+          <button class="rule-save-btn" onclick={`saveShiftRule('${ts}', this)`}>
+            Save &amp; Apply to All Game Days
+          </button>
+          <div class="rule-status" id={`rule-status-${ts.replace(/\./g,'-')}`}></div>
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+<!-- ── Canteen allocation by team ─────────────────────────────────────────── -->
+<div class="allocation-section">
+  <h2 class="allocation-heading">Canteen Allocation by Team</h2>
+  <p class="allocation-sub">Players pulled from 2026 registrations. The number shows how many canteen slots each person has filled this season. Names shaded red have fewer than 2.</p>
+
+  <div class="allocation-legend">
+    <span><span class="legend-swatch-red"></span> Fewer than 2 shifts</span>
+    <span><span class="legend-swatch-green"></span> 2 or more shifts</span>
+  </div>
+
+  <div class="team-blocks">
+    {TEAM_GRADES.map(grade => {
+      const team = playersByGrade[grade] ?? [];
+      return (
+        <div class="team-block">
+          <div class="team-block-head">
+            <h3>{grade}</h3>
+            <span class="team-player-count">{team.length} players</span>
+          </div>
+          {team.length === 0 ? (
+            <p class="team-empty">No players registered in this grade.</p>
+          ) : (
+            <div class="player-roster">
+              {team.map(p => {
+                const count = canteenCounts[p.id] ?? 0;
+                const isUnder = count < 2;
+                return (
+                  <div class="player-row">
+                    <span class={`player-name${isUnder ? ' under-quota' : ''}`}>{p.full_name}</span>
+                    <span class={`canteen-count-box${count === 0 ? ' zero' : count >= 2 ? ' ok' : ''}`}>{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</div>
+
+<!-- Fill / Edit modal -->
+<div class="modal-overlay" id="fill-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('fill-modal').classList.remove('open')">✕</button>
+    <h3 id="fill-modal-title">Add Volunteer</h3>
+    <div class="modal-sub" id="fill-modal-sub"></div>
+    <input type="hidden" id="fill-slot-id" />
+    <div class="form-row">
+      <label>Name *</label>
+      <input type="text" id="fill-name" placeholder="e.g. Sarah Mitchell" />
+    </div>
+    <div class="form-row">
+      <label>Phone</label>
+      <input type="tel" id="fill-phone" placeholder="04xx xxx xxx" />
+    </div>
+    <div class="form-row">
+      <label>Grade / Team</label>
+      <input type="text" id="fill-grade" placeholder="e.g. A-Grade, U11s" />
+    </div>
+    <div class="form-row">
+      <label>Notes</label>
+      <input type="text" id="fill-notes" placeholder="Optional" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('fill-modal').classList.remove('open')">Cancel</button>
+      <button class="btn-modal-save" id="fill-save-btn" onclick="saveFill()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Game Day modal -->
+<div class="modal-overlay" id="add-day-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="document.getElementById('add-day-modal').classList.remove('open')">✕</button>
+    <h3>Add Game Day</h3>
+    <div class="modal-sub">Creates a new home game day with 27 empty slots pre-seeded.</div>
+    <div class="form-row">
+      <label>Round *</label>
+      <input type="number" id="new-round" min="1" max="22" placeholder="e.g. 12" />
+    </div>
+    <div class="form-row">
+      <label>Match Date *</label>
+      <input type="date" id="new-date" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="document.getElementById('add-day-modal').classList.remove('open')">Cancel</button>
+      <button class="btn-modal-save" onclick="addGameDay()">Add Game Day</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Tab switching ─────────────────────────────────────────
+  function switchTab(btn) {
+    const idx = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === idx));
+    document.querySelectorAll('.panel-wrap').forEach(p => p.classList.toggle('active', p.dataset.panel === idx));
+  }
+
+  // ── Clear slot ────────────────────────────────────────────
+  async function clearSlot(slotId, btn) {
+    if (!confirm('Remove this volunteer from the roster?')) return;
+    btn.disabled = true;
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear_slot', slot_id: slotId }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error); btn.disabled = false; return; }
+    // Rebuild cell
+    const cell = btn.closest('.slot-cell');
+    if (cell) {
+      cell.innerHTML = `
+        <div class="slot-empty-cell">
+          <button class="add-vol-btn" onclick="openFill('${slotId}', this)">+ Add volunteer</button>
+          <button class="nofill-toggle" onclick="toggleNoFill('${slotId}', this)">Set no-fill</button>
+        </div>
+      `;
+    }
+  }
+
+  // ── Toggle no-fill ────────────────────────────────────────
+  async function toggleNoFill(slotId, btn) {
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_no_fill', slot_id: slotId }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error); return; }
+    const cell = btn.closest('.slot-cell');
+    if (cell) {
+      if (data.no_fill) {
+        cell.innerHTML = `
+          <div class="slot-nofill-cell">
+            <span class="nofill-label">No fill</span>
+            <button class="enable-toggle" onclick="toggleNoFill('${slotId}', this)">Enable</button>
+          </div>
+        `;
+      } else {
+        cell.innerHTML = `
+          <div class="slot-empty-cell">
+            <button class="add-vol-btn" onclick="openFill('${slotId}', this)">+ Add volunteer</button>
+            <button class="nofill-toggle" onclick="toggleNoFill('${slotId}', this)">Set no-fill</button>
+          </div>
+        `;
+      }
+    }
+  }
+
+  // ── Fill / Edit modal ─────────────────────────────────────
+  let activeSlotId = null, activeSlotBtn = null;
+
+  function openFill(slotId, btn) {
+    activeSlotId = slotId; activeSlotBtn = btn;
+    document.getElementById('fill-slot-id').value = slotId;
+    document.getElementById('fill-modal-title').textContent = 'Add Volunteer';
+    document.getElementById('fill-name').value = '';
+    document.getElementById('fill-phone').value = '';
+    document.getElementById('fill-grade').value = '';
+    document.getElementById('fill-notes').value = '';
+    document.getElementById('fill-modal').classList.add('open');
+    setTimeout(() => document.getElementById('fill-name')?.focus(), 50);
+  }
+
+  function openEdit(slotId, name, phone, grade, btn) {
+    activeSlotId = slotId; activeSlotBtn = btn;
+    document.getElementById('fill-slot-id').value = slotId;
+    document.getElementById('fill-modal-title').textContent = 'Edit Volunteer';
+    document.getElementById('fill-name').value  = decodeURIComponent(name.replace(/&#39;/g,"'"));
+    document.getElementById('fill-phone').value = decodeURIComponent(phone.replace(/&#39;/g,"'"));
+    document.getElementById('fill-grade').value = decodeURIComponent(grade.replace(/&#39;/g,"'"));
+    document.getElementById('fill-notes').value = '';
+    document.getElementById('fill-modal').classList.add('open');
+    setTimeout(() => document.getElementById('fill-name')?.focus(), 50);
+  }
+
+  async function saveFill() {
+    const name  = document.getElementById('fill-name').value.trim();
+    const phone = document.getElementById('fill-phone').value.trim();
+    const grade = document.getElementById('fill-grade').value.trim();
+    const notes = document.getElementById('fill-notes').value.trim();
+    if (!name) { document.getElementById('fill-name').focus(); return; }
+    const btn = document.getElementById('fill-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_slot', slot_id: activeSlotId, name, phone, grade, notes }),
+    });
+    const data = await res.json();
+    btn.disabled = false; btn.textContent = 'Save';
+    if (!data.ok) { alert(data.error); return; }
+
+    // Rebuild cell
+    const cell = activeSlotBtn?.closest('.slot-cell');
+    if (cell) {
+      const metaParts = [grade, phone].filter(Boolean).join(' · ');
+      cell.innerHTML = `
+        <div class="vol-card">
+          <div class="vol-name">${name}</div>
+          ${metaParts ? `<div class="vol-meta">${metaParts}</div>` : ''}
+        </div>
+        <div class="slot-actions">
+          <button class="slot-act-btn slot-act-clear" onclick="clearSlot('${activeSlotId}', this)">Remove</button>
+          <button class="slot-act-btn slot-act-edit" onclick="openEdit('${activeSlotId}','${encodeURIComponent(name)}','${encodeURIComponent(phone)}','${encodeURIComponent(grade)}',this)">Edit</button>
+        </div>
+      `;
+    }
+    document.getElementById('fill-modal').classList.remove('open');
+  }
+
+  // ── Toggle game day visibility ────────────────────────────
+  async function toggleGameDay(btn) {
+    const gdId = btn.dataset.gdId;
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle_game_day', game_day_id: gdId }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error); return; }
+    if (data.active) {
+      btn.textContent = '● Visible to public';
+      btn.className = 'toggle-active-btn is-active';
+    } else {
+      btn.textContent = '○ Hidden from public';
+      btn.className = 'toggle-active-btn is-inactive';
+    }
+    // Update tab badge
+    const panel = btn.closest('.panel-wrap');
+    const tab   = panel ? document.querySelector(`.tab-btn[data-tab="${panel.dataset.panel}"]`) : null;
+    const badge = tab?.querySelector('.tab-badge');
+    if (badge) {
+      if (!data.active) {
+        badge.className = 'tab-badge inactive'; badge.textContent = 'Hidden';
+      } else {
+        badge.className = 'tab-badge'; badge.textContent = 'Active';
+      }
+    }
+  }
+
+  // ── Add game day ──────────────────────────────────────────
+  async function addGameDay() {
+    const round = document.getElementById('new-round').value;
+    const date  = document.getElementById('new-date').value;
+    if (!round || !date) { alert('Round and date are required.'); return; }
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_game_day', round: parseInt(round), match_date: date }),
+    });
+    const data = await res.json();
+    if (!data.ok) { alert(data.error); return; }
+    document.getElementById('add-day-modal').classList.remove('open');
+    window.location.reload();
+  }
+
+  // ── Modal close on overlay click / Escape ─────────────────
+  ['fill-modal','add-day-modal'].forEach(id => {
+    const el = document.getElementById(id);
+    el?.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    }
+  });
+
+  // ── Save shift rules ─────────────────────────────────────
+  async function saveShiftRule(timeSlot, btn) {
+    const card = btn.closest('.rule-card');
+    const club = card.querySelector(`input[name="club-${timeSlot}"]:checked`)?.value ?? 'any';
+    const gradeChecks = [...card.querySelectorAll(`input[name="grade-${timeSlot}"]:checked`)];
+    const eligible_grades = gradeChecks.map(cb => cb.value);
+
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    const res  = await fetch('/api/admin/canteen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_shift_rules', time_slot: timeSlot, club, eligible_grades }),
+    });
+    const data = await res.json();
+
+    btn.disabled = false; btn.textContent = 'Save & Apply to All Game Days';
+    const statusEl = document.getElementById(`rule-status-${timeSlot.replace(/\./g, '-')}`);
+    if (!data.ok) {
+      if (statusEl) { statusEl.textContent = '✗ ' + (data.error ?? 'Error'); statusEl.style.color = '#f87171'; }
+    } else {
+      if (statusEl) {
+        statusEl.textContent = '✓ Saved and applied';
+        statusEl.style.color = '#4ade80';
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      }
+    }
+  }
+
+  window.switchTab   = switchTab;
+  window.clearSlot   = clearSlot;
+  window.toggleNoFill = toggleNoFill;
+  window.openFill    = openFill;
+  window.openEdit    = openEdit;
+  window.saveFill    = saveFill;
+  window.toggleGameDay = toggleGameDay;
+  window.addGameDay  = addGameDay;
+  window.saveShiftRule = saveShiftRule;
+</script>
+</AdminLayout>

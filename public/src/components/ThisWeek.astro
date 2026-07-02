@@ -1,0 +1,325 @@
+---
+import Crest from './Crest.astro';
+import { CLUBS, type ClubSlug } from '../lib/clubs.ts';
+
+interface FixtureRow {
+  grade: string;
+  homeSlug: ClubSlug;
+  homeName: string;
+  awaySlug: ClubSlug;
+  awayName: string;
+  time: string;
+  ampm: 'AM' | 'PM';
+  venueLabel: string;
+  isHomeVenue: boolean;
+}
+
+interface LadderRow {
+  pos: number;
+  slug: ClubSlug;
+  team: string;
+  p: number;
+  w: number;
+  l: number;
+  d?: number;
+  pct: string;
+  pts?: number;
+  highlight?: boolean;
+}
+
+interface NewsItem {
+  meta: string;
+  title: string;
+  href: string;
+}
+
+interface FormResult {
+  round:       number;
+  opponent:    string;
+  ourScore:    number;
+  theirScore:  number;
+  result:      'W' | 'L' | 'D';
+  isHome:      boolean;
+  margin:      number;
+}
+
+interface Props {
+  round: number;
+  afterRound: number;
+  date: string;
+  venue: string;
+  venueLabel: string; // e.g. "AWAY ROUND" / "HOME ROUND"
+  fixtures: FixtureRow[];
+  ladders: { grade: string; key: string; columns: 'pct' | 'pts'; rows: LadderRow[] }[];
+  news: NewsItem[];
+  ladderHeading?: string;
+  recentForm?: FormResult[];
+}
+
+// Derive Wallaroo's current standing in each grade from live ladder data
+const wallarooStandings = Astro.props.ladders
+  .map(l => {
+    const row = l.rows.find((r: LadderRow) => r.highlight);
+    if (!row) return null;
+    return { grade: l.grade, pos: row.pos, p: row.p, w: row.w, l: row.l, d: row.d ?? 0, pct: row.pct, total: l.rows.length };
+  })
+  .filter(Boolean) as { grade: string; pos: number; p: number; w: number; l: number; d: number; pct: string; total: number }[];
+
+const { round, afterRound, date, venue, venueLabel, fixtures, ladders, news, ladderHeading = 'YPFL Ladders', recentForm = [] } = Astro.props;
+---
+<section aria-labelledby="this-week-heading" id="this-week">
+  <div class="container">
+    <div class="section-header reveal">
+      <div>
+        <div class="section-eyebrow">Round {round} · {date}</div>
+        <h2 class="section-title" id="this-week-heading">This week at <span class="ital">Wallaroo</span></h2>
+      </div>
+      <a href="/fixtures/" class="section-link">Full Fixture →</a>
+    </div>
+
+    <div class="week-grid">
+      <div class="week-fixtures reveal">
+        <div class="week-fixtures-header">
+          <span>{venue} · Round {round}</span>
+          <span class="venue-label">{venueLabel}</span>
+        </div>
+        {fixtures.map(f => (
+          <div class="fixture-row">
+            <span class="fixture-grade">{f.grade}</span>
+            <span class="fixture-crest"><Crest club={f.homeSlug} size={36} /></span>
+            <span class="fixture-team home">{f.homeName}</span>
+            <span class="fixture-time">{f.time}<span class="small">{f.ampm}</span></span>
+            <span class="fixture-team away">{f.awayName}</span>
+            <span class="fixture-crest"><Crest club={f.awaySlug} size={36} /></span>
+            <span class={`fixture-venue${f.isHomeVenue ? ' home-venue' : ''}`}>{f.isHomeVenue ? 'Home' : 'Away'}</span>
+          </div>
+        ))}
+
+        {recentForm.length > 0 && (
+          <div class="form-guide">
+            <div class="form-heading">
+              <span>A-Grade recent form</span>
+              <div class="form-dots">
+                {recentForm.slice().reverse().map(r => (
+                  <span class={`form-dot form-dot--${r.result.toLowerCase()}`} title={`R${r.round} ${r.result} vs ${r.opponent}`}>{r.result}</span>
+                ))}
+              </div>
+            </div>
+            <div class="form-rows">
+              {recentForm.map(r => (
+                <div class="form-row">
+                  <span class="form-rnd">R{r.round}</span>
+                  <span class={`form-badge form-badge--${r.result.toLowerCase()}`}>{r.result}</span>
+                  <span class="form-opp">{r.isHome ? 'vs' : '@'} {r.opponent}</span>
+                  <span class="form-score">{r.ourScore}–{r.theirScore}</span>
+                  <span class="form-margin">{r.result !== 'D' ? `${r.margin} pts` : 'Draw'}</span>
+                  <span class="form-venue">{r.isHome ? 'Home' : 'Away'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {wallarooStandings.length > 0 && (
+          <div class="season-glance">
+            <div class="glance-heading">
+              <span>Season at a glance</span>
+              <a href="/ladders/" class="glance-link">Full Ladders →</a>
+            </div>
+            <div class="glance-grid">
+              {wallarooStandings.map(s => (
+                <div class="glance-card">
+                  <div class="glance-grade">{s.grade}</div>
+                  <div class="glance-pos">
+                    <span class="pos-num">{s.pos}</span>
+                    <span class="pos-of">of {s.total}</span>
+                  </div>
+                  <div class="glance-record">
+                    <span class="rec-w">{s.w}W</span>
+                    {s.d > 0 && <span class="rec-d">{s.d}D</span>}
+                    <span class="rec-l">{s.l}L</span>
+                  </div>
+                  <div class="glance-pct">{s.pct}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div class="week-side">
+        <div class="ladder-card reveal reveal-delay-1">
+          <div class="card-header">
+            <h3>{ladderHeading}</h3>
+            <span class="badge">After Rnd {afterRound}</span>
+          </div>
+          <div class="ladder-tabs" role="tablist" aria-label="Grade ladders">
+            {ladders.map((l, i) => (
+              <button class={`ladder-tab${i === 0 ? ' active' : ''}`} data-grade={l.key} role="tab" aria-selected={i === 0} aria-controls={`ladder-${l.key}`}>{l.grade}</button>
+            ))}
+          </div>
+          {ladders.map((l, i) => (
+            <div class={`ladder-panel${i === 0 ? ' active' : ''}`} data-panel={l.key} id={`ladder-${l.key}`} role="tabpanel">
+              <table class="ladder-table">
+                <thead>
+                  <tr><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">L</th><th class="num">{l.columns === 'pts' ? 'PTS' : '%'}</th></tr>
+                </thead>
+                <tbody>
+                  {l.rows.map(r => (
+                    <tr class={r.highlight ? 'highlight' : ''}>
+                      <td>
+                        <span class="pos">{r.pos}</span>
+                        <span class="crest-cell"><Crest club={r.slug} size={26} /></span>
+                        {r.team}
+                      </td>
+                      <td class="num">{r.p}</td>
+                      <td class="num">{r.w}</td>
+                      <td class="num">{r.l}</td>
+                      <td class="num">{l.columns === 'pts' ? (r.pts ?? '—') : r.pct}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+
+        <div class="news-card reveal reveal-delay-2">
+          <div class="card-header">
+            <h3>Latest News</h3>
+            <span class="badge red">{news.length} NEW</span>
+          </div>
+          <div class="news-list">
+            {news.map(n => (
+              <a href={n.href} class="news-item">
+                <div class="news-meta">{n.meta}</div>
+                <div class="news-title">{n.title}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  section { padding: 120px 32px; position: relative; background: var(--cream); }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 64px; gap: 32px; flex-wrap: wrap; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .section-title { font-family: var(--display); font-size: clamp(48px, 6vw, 88px); line-height: 0.92; color: var(--blue-deep); text-transform: uppercase; }
+  .section-title .ital { font-family: var(--serif); font-style: italic; font-weight: 400; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+  .section-link { font-family: var(--headline); font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue-deep); border-bottom: 3px solid var(--red); padding-bottom: 4px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s; }
+  .section-link:hover { color: var(--red); transform: translateX(4px); }
+
+  .week-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 32px; }
+  .week-fixtures { background: var(--white); border-radius: 6px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid var(--line); }
+  .week-fixtures-header { background: var(--blue-deep); color: var(--white); padding: 22px 28px; display: flex; justify-content: space-between; align-items: center; font-family: var(--headline); text-transform: uppercase; letter-spacing: 0.1em; font-size: 15px; position: relative; overflow: hidden; }
+  .week-fixtures-header::after { content: ''; position: absolute; top: 0; right: 0; height: 100%; width: 4px; background: var(--red); }
+  .week-fixtures-header .venue-label { color: rgba(255,255,255,0.7); }
+  .fixture-row { display: grid; grid-template-columns: 90px 36px 1fr auto 1fr 36px 110px; align-items: center; padding: 18px 28px; border-bottom: 1px solid var(--line); gap: 14px; transition: background 0.2s; position: relative; }
+  .fixture-row:hover { background: var(--cream); }
+  .fixture-row:last-child { border-bottom: none; }
+  .fixture-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--red); transition: width 0.3s; }
+  .fixture-row:hover::before { width: 4px; }
+  .fixture-grade { font-family: var(--headline); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--red); }
+  .fixture-crest { width: 36px; height: 36px; }
+  .fixture-team { font-family: var(--display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .fixture-team.home { text-align: left; color: var(--blue-deep); }
+  .fixture-team.away { text-align: right; color: var(--charcoal); }
+  .fixture-time { font-family: var(--display); font-size: 24px; color: var(--blue-deep); text-align: center; line-height: 1; letter-spacing: 0.02em; }
+  .fixture-time .small { display: block; font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; color: var(--grey); margin-top: 4px; }
+  .fixture-venue { font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); text-align: right; }
+  .fixture-venue.home-venue { color: var(--red); }
+  .fixture-venue.home-venue::before { content: '●'; margin-right: 4px; }
+
+  .week-side { display: flex; flex-direction: column; gap: 24px; }
+  .ladder-card, .news-card { background: var(--white); border-radius: 6px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid var(--line); }
+  .card-header { padding: 18px 22px; border-bottom: 2px solid var(--line); display: flex; justify-content: space-between; align-items: center; background: var(--cream); }
+  .card-header h3 { font-family: var(--display); font-size: 17px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue-deep); }
+  .card-header .badge { background: var(--blue-deep); color: var(--white); font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 10px; border-radius: 2px; }
+  .card-header .badge.red { background: var(--red); }
+  .ladder-table { width: 100%; border-collapse: collapse; }
+  .ladder-table th, .ladder-table td { padding: 9px 16px; text-align: left; font-size: 13px; }
+  .ladder-table th { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); background: rgba(0,0,0,0.02); }
+  .ladder-table th.num, .ladder-table td.num { text-align: right; }
+  .ladder-table tbody tr { border-bottom: 1px solid var(--line); transition: background 0.2s; }
+  .ladder-table tbody tr:hover { background: var(--cream); }
+  .ladder-table tbody tr:last-child { border-bottom: none; }
+  .ladder-table tbody tr.highlight { background: linear-gradient(90deg, rgba(200,16,46,0.1), rgba(200,16,46,0.02)); }
+  .ladder-table tbody tr.highlight td { color: var(--blue-deep); font-weight: 500; }
+  .ladder-table tbody tr.highlight td:first-child::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--red); }
+  .ladder-table td:first-child { position: relative; display: flex; align-items: center; gap: 10px; }
+  .ladder-table td .pos { display: inline-block; width: 18px; color: var(--grey); font-family: var(--display); font-size: 14px; }
+  .ladder-table tbody tr.highlight td .pos { color: var(--red); }
+  .ladder-table .crest-cell { width: 26px; height: 26px; flex-shrink: 0; }
+
+  .news-list { padding: 0; }
+  .news-item { display: block; padding: 18px 22px; border-bottom: 1px solid var(--line); transition: all 0.2s; }
+  .news-item:last-child { border-bottom: none; }
+  .news-item:hover { background: var(--cream); padding-left: 26px; }
+  .news-meta { font-family: var(--headline); font-size: 11px; color: var(--red); letter-spacing: 0.14em; margin-bottom: 6px; text-transform: uppercase; }
+  .news-title { font-family: var(--display); font-size: 16px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.2; }
+
+  .ladder-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: var(--cream); border-bottom: 1px solid var(--line); }
+  .ladder-tab { background: transparent; border: none; padding: 12px 6px; font-family: var(--headline); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--grey); cursor: pointer; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; }
+  .ladder-tab:hover { color: var(--blue-deep); background: rgba(0,0,0,0.02); }
+  .ladder-tab.active { color: var(--red); border-bottom-color: var(--red); background: var(--white); }
+  .ladder-panel { display: none; }
+  .ladder-panel.active { display: block; }
+
+  /* A-Grade recent form */
+  .form-guide { border-top: 2px solid var(--line); padding: 20px 28px 22px; }
+  .form-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .form-heading span { font-family: var(--headline); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--grey); }
+  .form-dots { display: flex; gap: 6px; }
+  .form-dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-size: 13px; color: var(--white); }
+  .form-dot--w { background: var(--green, #2a7f4f); }
+  .form-dot--l { background: var(--red); }
+  .form-dot--d { background: var(--grey); }
+  .form-rows { display: flex; flex-direction: column; gap: 0; }
+  .form-row { display: grid; grid-template-columns: 30px 28px 1fr auto 70px 52px; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .form-row:last-child { border-bottom: none; }
+  .form-rnd { font-family: var(--headline); font-size: 11px; color: var(--grey); letter-spacing: 0.08em; }
+  .form-badge { width: 28px; height: 28px; border-radius: 4px; display: grid; place-items: center; font-family: var(--display); font-size: 14px; color: var(--white); flex-shrink: 0; }
+  .form-badge--w { background: var(--green, #2a7f4f); }
+  .form-badge--l { background: var(--red); }
+  .form-badge--d { background: var(--grey); }
+  .form-opp { font-family: var(--display); font-size: 14px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.03em; }
+  .form-score { font-family: var(--display); font-size: 15px; color: var(--blue-deep); text-align: right; letter-spacing: 0.03em; }
+  .form-margin { font-family: var(--headline); font-size: 11px; color: var(--grey); text-align: right; letter-spacing: 0.06em; }
+  .form-venue { font-family: var(--headline); font-size: 11px; color: var(--grey); text-align: right; letter-spacing: 0.06em; }
+
+  /* Season at a glance */
+  .season-glance { border-top: 2px solid var(--line); background: var(--cream); padding: 24px 28px 28px; }
+  .glance-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .glance-heading span { font-family: var(--headline); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--grey); }
+  .glance-link { font-family: var(--headline); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--red); transition: opacity 0.2s; }
+  .glance-link:hover { opacity: 0.7; }
+  .glance-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .glance-card { background: var(--white); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; border-top: 3px solid var(--blue-deep); transition: border-top-color 0.2s; }
+  .glance-card:hover { border-top-color: var(--red); }
+  .glance-grade { font-family: var(--headline); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); }
+  .glance-pos { display: flex; align-items: baseline; gap: 4px; margin: 4px 0; }
+  .pos-num { font-family: var(--display); font-size: 36px; line-height: 1; color: var(--blue-deep); letter-spacing: 0.02em; }
+  .pos-of { font-family: var(--headline); font-size: 11px; color: var(--grey); letter-spacing: 0.08em; }
+  .glance-record { display: flex; gap: 6px; }
+  .rec-w, .rec-d, .rec-l { font-family: var(--display); font-size: 13px; letter-spacing: 0.04em; }
+  .rec-w { color: var(--green, #2a7f4f); }
+  .rec-d { color: var(--grey); }
+  .rec-l { color: var(--red); }
+  .glance-pct { font-family: var(--headline); font-size: 11px; color: var(--grey); letter-spacing: 0.08em; margin-top: 2px; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+
+  @media (max-width: 1100px) { .week-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 768px) {
+    .fixture-row { grid-template-columns: auto auto 1fr auto 1fr auto auto; gap: 8px; padding: 16px; }
+    section { padding: 80px 24px; }
+  }
+</style>

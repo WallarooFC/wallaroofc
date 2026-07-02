@@ -1,0 +1,96 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  canonical?: string;
+  ogImage?: string;
+}
+
+const {
+  title = 'Wallaroo Football Club — Home of the Bulldogs',
+  description = "Founded 1867. One of Australia's oldest continuously running football clubs. YPFL · SANFL Affiliate. Wallaroo Oval, Cornish Terrace, SA.",
+  canonical,
+  ogImage = '/og-default.jpg',
+} = Astro.props;
+
+const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'https://wallaroofc.com').toString();
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonicalUrl} />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:site_name" content="Wallaroo Football Club" />
+  <meta property="og:locale" content="en_AU" />
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={ogImage} />
+
+  <!-- Fonts — non-blocking load: print media + onload swap. font-display:swap in URL gives FOUT not FOIT. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    media="print"
+    onload="this.media='all'"
+    href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Oswald:wght@400;600&family=Fraunces:ital,wght@0,600;1,400&family=Inter:wght@400;600&display=swap"
+  />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Oswald:wght@400;600&family=Fraunces:ital,wght@0,600;1,400&family=Inter:wght@400;600&display=swap" />
+  </noscript>
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <script src="https://portal.wallaroofc.com/widget.js" defer></script>
+</head>
+<body>
+  <slot />
+
+  <script>
+    // Masthead shadow on scroll
+    const masthead = document.getElementById('masthead');
+    if (masthead) {
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 12) masthead.classList.add('scrolled');
+        else masthead.classList.remove('scrolled');
+      }, { passive: true });
+    }
+
+    // Reveal-on-scroll observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add('visible');
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Ladder tabs
+    document.querySelectorAll<HTMLButtonElement>('.ladder-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const grade = tab.dataset.grade;
+        if (!grade) return;
+        const card = tab.closest('.ladder-card');
+        if (!card) return;
+        card.querySelectorAll('.ladder-tab').forEach(t => t.classList.remove('active'));
+        card.querySelectorAll('.ladder-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        card.querySelector(`.ladder-panel[data-panel="${grade}"]`)?.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

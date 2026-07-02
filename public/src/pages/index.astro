@@ -1,0 +1,650 @@
+---
+export const prerender = false;
+
+import { getCollection, getEntry } from 'astro:content';
+import { supabase } from '../lib/supabase';
+import { nameToSlug } from '../lib/clubs';
+
+import Layout from '../layouts/Layout.astro';
+import TopStrip from '../components/TopStrip.astro';
+import Masthead from '../components/Masthead.astro';
+import Hero from '../components/Hero.astro';
+import YPFLStrip from '../components/YPFLStrip.astro';
+import ResultsTicker from '../components/ResultsTicker.astro';
+import ThisWeek from '../components/ThisWeek.astro';
+import GameDayInfo from '../components/GameDayInfo.astro';
+import CanteenStrip from '../components/CanteenStrip.astro';
+import FullFixture from '../components/FullFixture.astro';
+import SocialCalendar from '../components/SocialCalendar.astro';
+import JoinStrip from '../components/JoinStrip.astro';
+import JuniorPathway from '../components/JuniorPathway.astro';
+import Volunteers from '../components/Volunteers.astro';
+import Heritage from '../components/Heritage.astro';
+import PremiershipWall from '../components/PremiershipWall.astro';
+import Events from '../components/Events.astro';
+import Gallery from '../components/Gallery.astro';
+import Sponsors from '../components/Sponsors.astro';
+import Footer from '../components/Footer.astro';
+
+// Prevent Vercel edge caching — always serve fresh data
+Astro.response.headers.set('Cache-Control', 'no-store, max-age=0');
+
+// ─────────────────────────────────────────────────────────────
+// 1. Site config from Supabase (with YAML fallback)
+// ─────────────────────────────────────────────────────────────
+const { data: configRows } = await supabase.from('site_config').select('key,value');
+const cfg: Record<string, string> = {};
+for (const r of configRows ?? []) cfg[r.key] = r.value ?? '';
+
+// Fall back to YAML if Supabase site_config is empty
+let site: Record<string, any> = {};
+if (Object.keys(cfg).length === 0) {
+  const siteEntry = await getEntry('site', 'config');
+  site = siteEntry?.data?.config ?? {};
+} else {
+  const currentRound = parseInt(cfg.current_round ?? '1');
+  site = {
+    season:                   parseInt(cfg.season ?? '2026'),
+    currentRound,
+    lastCompletedRound:       parseInt(cfg.last_completed_round ?? String(currentRound - 1)),
+    currentDate:              cfg.current_date ?? '',
+    nextMatchDate:            cfg.next_match_date ?? '',
+    nextMatchBounce:          cfg.next_match_bounce ?? '',
+    nextMatchVenue:           cfg.next_match_venue ?? '',
+    nextMatchHomeOrAway:      cfg.next_match_home_or_away ?? 'HOME',
+    nextMatchOpponent:        cfg.next_match_opponent ?? '',
+    nextMatchOpponentName:    cfg.next_match_opponent_name ?? '',
+    nextMatchOpponentRecord:  cfg.next_match_opponent_record ?? '',
+    ourRecord:                cfg.our_record ?? '',
+    thisWeekVenue:            cfg.this_week_venue ?? '',
+    thisWeekVenueLabel:       cfg.this_week_venue_label ?? '',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2. Fixtures — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+const [{ data: dbFixtures }, { data: dbResults }] = await Promise.all([
+  supabase.from('fixtures').select('*').eq('season', site.season ?? 2026).order('round').order('grade'),
+  supabase.from('results').select('round,home_team,home_score,away_team,away_score').eq('season', site.season ?? 2026).eq('grade', 'A-Grade').or('home_team.ilike.%wallaroo%,away_team.ilike.%wallaroo%'),
+]);
+
+// Grade bounce time defaults
+const GRADE_TIMES: Record<string, { time: string; ampm: 'AM' | 'PM' }> = {
+  'A-Grade':      { time: '2:40',  ampm: 'PM' },
+  'B Grade':      { time: '12:55', ampm: 'PM' },
+  'Senior Colts': { time: '11:20', ampm: 'AM' },
+  'Junior Colts': { time: '10:00', ampm: 'AM' },
+  'U11':          { time: '9:00',  ampm: 'AM' },
+  'U9':           { time: '9:00',  ampm: 'AM' },
+};
+
+// Build round → Wallaroo score map
+const scoreByRound = new Map<number, { wallarooScore: number; oppScore: number; wallarooWon: boolean }>();
+for (const r of dbResults ?? []) {
+  const wallarooIsHome = r.home_team?.toLowerCase().includes('wallaroo');
+  const wallarooIsAway = r.away_team?.toLowerCase().includes('wallaroo');
+  if (!wallarooIsHome && !wallarooIsAway) continue;
+  const wScore = wallarooIsHome ? r.home_score : r.away_score;
+  const oScore = wallarooIsHome ? r.away_score : r.home_score;
+  if (wScore !== null && oScore !== null) {
+    scoreByRound.set(r.round, { wallarooScore: wScore, oppScore: oScore, wallarooWon: wScore > oScore });
+  }
+}
+
+// Map Supabase fixtures → FullFixture FixtureCard shape
+let fixtures: any[] = [];
+let weekFixtures: any[] = [];
+
+if ((dbFixtures ?? []).length > 0) {
+  fixtures = (dbFixtures ?? [])
+    .filter(f => f.opponent && f.grade === 'A-Grade') // A-Grade only for full fixture display
+    .map(f => {
+      const matchDate = f.match_date
+        ? new Date(f.match_date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+        : '';
+      const score = f.status === 'completed' ? scoreByRound.get(f.round) : undefined;
+      return {
+        round:         f.round,
+        date:          matchDate,
+        type:          f.status === 'bye' ? 'bye' : 'match',
+        oppSlug:       nameToSlug(f.opponent),
+        oppName:       f.opponent,
+        venue:         f.is_home ? 'HOME' : 'AWAY',
+        venueDetail:   f.is_home ? 'Wallaroo Oval' : f.venue,
+        status:        f.status === 'completed' ? 'past' : f.status === 'upcoming' ? 'upcoming' : undefined,
+        wallarooScore: score?.wallarooScore,
+        oppScore:      score?.oppScore,
+        wallarooWon:   score?.wallarooWon,
+      };
+    });
+
+  // This week's fixtures (current round, Wallaroo games only)
+  const currentRound = parseInt(String(site.currentRound));
+  weekFixtures = (dbFixtures ?? [])
+    .filter(f => f.round === currentRound && f.status !== 'bye' && f.opponent)
+    .map(f => {
+      const gt = GRADE_TIMES[f.grade] ?? { time: '—', ampm: 'AM' };
+      const [timePart, ampmRaw] = (f.match_time ?? '').split(':').length > 1
+        ? (() => {
+            const [h, m] = (f.match_time ?? '').split(':');
+            const hr = parseInt(h);
+            return [
+              `${hr > 12 ? hr - 12 : hr}:${m}`,
+              hr >= 12 ? 'PM' : 'AM',
+            ];
+          })()
+        : [gt.time, gt.ampm];
+      // Convert time to minutes-since-midnight for sorting
+      const [th, tm] = timePart.split(':').map(Number);
+      const totalMins = (ampmRaw === 'PM' && th !== 12 ? th + 12 : th) * 60 + (tm || 0);
+      return {
+        grade:       f.grade,
+        homeSlug:    nameToSlug(f.home_team) ?? 'wallaroo',
+        homeName:    f.home_team ?? '',
+        awaySlug:    nameToSlug(f.away_team) ?? 'wallaroo',
+        awayName:    f.away_team ?? '',
+        time:        timePart,
+        ampm:        ampmRaw,
+        venueLabel:  f.is_home ? 'Home' : 'Away',
+        isHomeVenue: !!f.is_home,
+        _sortMins:   totalMins,
+      };
+    })
+    .sort((a, b) => a._sortMins - b._sortMins);
+} else {
+  // YAML fallback
+  const yamlFixtures = (await getCollection('fixtures')).map(e => e.data).sort((a, b) => a.round - b.round);
+  fixtures = yamlFixtures;
+  weekFixtures = (await getCollection('thisWeekFixtures')).map(e => e.data);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. Finals — always from YAML (manually curated)
+// ─────────────────────────────────────────────────────────────
+const MONTH_ORDER: Record<string, number> = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
+function finalDateSort(d: string) {
+  const parts = d.replace(/^(Sat|Sun|Mon|Tue|Wed|Thu|Fri)\s+/, '').split(' ');
+  return (MONTH_ORDER[parts[1]] ?? 0) * 100 + parseInt(parts[0]);
+}
+const finals = (await getCollection('finals')).map(e => e.data).sort((a: any, b: any) => finalDateSort(a.date) - finalDateSort(b.date));
+
+// ─────────────────────────────────────────────────────────────
+// 4. Results ticker — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+let tickerResults: any[] = [];
+
+// Find the latest round that has actual game results (not just future-round byes)
+const { data: latestGameRow } = await supabase
+  .from('results')
+  .select('round')
+  .eq('season', site.season ?? 2026)
+  .is('bye_team', null)           // actual games only — bye rows have bye_team set
+  .order('round', { ascending: false })
+  .limit(1)
+  .single();
+
+if (latestGameRow) {
+  const { data: dbResults } = await supabase
+    .from('results')
+    .select('*')
+    .eq('season', site.season ?? 2026)
+    .eq('round', latestGameRow.round)
+    .order('grade');
+
+  tickerResults = (dbResults ?? []).map(r => {
+    if (r.bye_team) return { grade: r.grade, round: r.round, byeTeam: r.bye_team };
+    const hs = r.home_score ?? 0;
+    const as_ = r.away_score ?? 0;
+    const margin = Math.abs(hs - as_);
+    const homeWon = hs > as_;
+    const drawn   = hs === as_;
+    return {
+      grade:      r.grade,
+      round:      r.round,
+      homeName:   homeWon || drawn ? r.home_team : r.away_team,
+      homeScore:  String(homeWon || drawn ? hs : as_),
+      awayName:   homeWon || drawn ? r.away_team : r.home_team,
+      awayScore:  String(homeWon || drawn ? as_ : hs),
+      margin:     drawn ? undefined : `${margin} PTS`,
+      drawn,
+      byeTeam:    r.bye_team,
+    };
+  });
+} else {
+  const allResults = (await getCollection('results')).map(e => e.data).sort((a, b) => b.round - a.round);
+  const latestResults = allResults[0];
+  if (latestResults) {
+    tickerResults = latestResults.games.map((g: any) => ({
+      grade: g.grade, round: latestResults.round,
+      homeName: g.homeName, homeScore: g.homeScore,
+      awayName: g.awayName, awayScore: g.awayScore,
+      margin: g.margin, byeTeam: g.byeTeam,
+    }));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 4b. Recent form — Wallaroo A-Grade last 6 completed results
+// ─────────────────────────────────────────────────────────────
+let recentForm: any[] = [];
+if (latestGameRow) {
+  // Fetch Wallaroo A-Grade results (excluding byes)
+  const { data: formResults } = await supabase
+    .from('results')
+    .select('*')
+    .eq('season', site.season ?? 2026)
+    .eq('grade', 'A-Grade')
+    .is('bye_team', null)
+    .or('home_team.eq.Wallaroo,away_team.eq.Wallaroo')
+    .order('round', { ascending: false })
+    .limit(6);
+
+  recentForm = (formResults ?? []).map(r => {
+    const isHome    = r.home_team === 'Wallaroo';
+    const opponent  = isHome ? r.away_team : r.home_team;
+    const ourScore  = isHome ? r.home_score : r.away_score;
+    const theirScore = isHome ? r.away_score : r.home_score;
+    const won       = ourScore > theirScore;
+    const drawn     = ourScore === theirScore;
+    return {
+      round:      r.round,
+      opponent,
+      ourScore,
+      theirScore,
+      result:     drawn ? 'D' : won ? 'W' : 'L',
+      isHome,
+      margin:     Math.abs(ourScore - theirScore),
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5. Ladders — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+let ladders: any[] = [];
+const { data: dbLadders } = await supabase
+  .from('ladders')
+  .select('*')
+  .eq('season', site.season ?? 2026)
+  .order('display_order');
+
+if ((dbLadders ?? []).length > 0) {
+  ladders = (dbLadders ?? []).map(l => ({
+    grade:   l.tab_label ?? l.grade,
+    key:     l.grade.toLowerCase().replace(/\s+/g, '-'),
+    columns: l.columns,
+    rows:    l.rows,
+  }));
+} else {
+  const yamlLadders = (await getCollection('ladders')).map(e => e.data).sort((a: any, b: any) => a.order - b.order);
+  ladders = yamlLadders.map((l: any) => ({
+    grade:   l.tabLabel ?? l.grade,
+    key:     l.grade.toLowerCase().replace(/\s+/g, '-'),
+    columns: l.columns,
+    rows:    l.rows,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────
+// 6. News — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+let news: any[] = [];
+const { data: dbNews } = await supabase
+  .from('news')
+  .select('*')
+  .eq('published', true)
+  .order('pinned', { ascending: false })
+  .order('published_at', { ascending: false })
+  .limit(3);
+
+if ((dbNews ?? []).length > 0) {
+  news = (dbNews ?? []).map(n => ({
+    meta:  `${n.category} · ${new Date(n.published_at ?? n.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }).toUpperCase()}`,
+    title: n.title,
+    href:  n.href ?? `/news/${n.slug}/`,
+  }));
+} else {
+  const yamlNews = (await getCollection('news'))
+    .map(e => ({ ...e.data, slug: e.id }))
+    .sort((a: any, b: any) => {
+      if (a.pinned !== b.pinned) return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+      return b.date.getTime() - a.date.getTime();
+    }).slice(0, 3);
+  news = yamlNews.map((n: any) => ({
+    meta:  `${n.category} · ${n.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }).toUpperCase()}`,
+    title: n.title,
+    href:  n.href ?? `/news/${n.slug}/`,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────
+// 7. Sponsors — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+const { data: dbSponsors } = await supabase
+  .from('sponsors')
+  .select('*')
+  .eq('active', true)
+  .order('display_order')
+  .order('name');
+
+// Sponsor logo map — only proper logo files (simple marks on white/transparent backgrounds).
+const sponsorLogoMap: Record<string, string> = {
+  'Spencer Gulf Searoad':             '/sponsors/spencer-gulf-searoad.png',
+  'Wallaroo Alehouse':                '/sponsors/coopers-alehouse.png',
+  'WFI':                              '/sponsors/wfi.png',
+  'Gunnings':                         '/sponsors/gunnings.png',
+  'Bond Store Wallaroo':              '/sponsors/bond-store.png',
+  'McDonalds':                        '/sponsors/mcdonalds.png',
+  'Kadina McDonalds':                 '/sponsors/mcdonalds.png',
+};
+
+let sponsorEntries: any[] = [];
+if ((dbSponsors ?? []).length > 0) {
+  sponsorEntries = (dbSponsors ?? []).map(s => ({
+    name:  s.name,
+    tier:  s.tier,
+    order: s.display_order,
+    logo:  s.logo_url ?? sponsorLogoMap[s.name],
+  }));
+} else {
+  const yaml = (await getCollection('sponsors')).map(e => e.data);
+  sponsorEntries = yaml.map((s: any) => ({ ...s, logo: sponsorLogoMap[s.name] }));
+}
+
+const sortInTier = (a: any, b: any) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name);
+const tierOrder = ['platinum', 'vip', 'gold', 'silver', 'bronze'];
+
+// Full 2026 sponsor ribbon — ordered Major → Gold → Silver → Bronze → Club
+const BASE = '/sponsors/WFC_2026_Sponsor_Logos';
+const ribbonItems = [
+  // ── Major ──────────────────────────────────────────────────
+  { name: 'Aspen',                                 logo: `${BASE}/Major/Aspen.png` },
+  { name: 'Bennett Painting & Decorating',         logo: `${BASE}/Major/Bennett_Painting_&_Decorating.png` },
+  { name: 'Cornucopia Hotel',                      logo: `${BASE}/Major/Cornucopia_Hotel.jpg` },
+  { name: "DD's Air Conditioning & Hygiene",       logo: `${BASE}/Major/DDs_Air_Conditioning_&_Hygiene_Services.jpg` },
+  { name: 'Hallett Group',                         logo: `${BASE}/Major/Hallett_Group.png` },
+  { name: 'Leanic Civil Mining & Construction',    logo: `${BASE}/Major/Leanic_Civil_Mining_&_Construction.png` },
+  { name: 'Murray Pest Control YP',                logo: `${BASE}/Major/Murray_Pest_Control_YP.png` },
+  { name: 'PSD Pirie Signs & Designs',             logo: `${BASE}/Major/PSD_Pirie_Signs_&_Designs.jpg` },
+  { name: 'Subway',                                logo: `${BASE}/Major/Subway.png` },
+  { name: 'T-Ports',                               logo: `${BASE}/Major/T-Ports.png` },
+  { name: 'TR Depledge Gardening & Maintenance',   logo: `${BASE}/Major/TR_Depledge_Gardening_&_Maintenance.png` },
+  { name: 'Wallaroo Holiday Park',                 logo: `${BASE}/Major/Wallaroo_Holiday_Park.png` },
+  { name: 'YP Shade Solutions',                    logo: `${BASE}/Major/YP_Shade_Solutions.jpg` },
+  { name: 'Yorke Peninsula Marine',                logo: `${BASE}/Major/Yorke_Peninsula_Marine.png` },
+  // ── Gold ───────────────────────────────────────────────────
+  { name: 'All Creeks',                            logo: `${BASE}/Gold/All_Creeks.png` },
+  { name: 'Anglers Inn',                           logo: `${BASE}/Gold/Anglers_Inn.png` },
+  { name: 'BHS Rep-Eng',                           logo: `${BASE}/Gold/BHS_Rep-Eng.png` },
+  { name: 'Cade Angus Plumbing & Gas',             logo: `${BASE}/Gold/Cade_Angus_Plumbing_&_Gas.png` },
+  { name: 'Copper Club Dunes Port Hughes',         logo: `${BASE}/Gold/Copper_Club_Dunes_Port_Hughes.png` },
+  { name: 'Fence It YP',                           logo: `${BASE}/Gold/Fence_It_YP.png` },
+  { name: 'Forty Winks',                           logo: `${BASE}/Gold/Forty_Winks.png` },
+  { name: 'Get Laid Flooring Yorke Peninsula',     logo: `${BASE}/Gold/Get_Laid_Flooring_Yorke_Peninsula.jpg` },
+  { name: 'Guns N Buns',                           logo: `${BASE}/Gold/Guns_N_Buns.png` },
+  { name: 'Maritime Constructions',                logo: `${BASE}/Gold/Maritime_Constructions.png` },
+  { name: 'Poona Crushing and Gravel',             logo: `${BASE}/Gold/Poona_Crushing_and_Gravel.png` },
+  { name: 'Real Estate On Yorke',                  logo: `${BASE}/Gold/Real_Estate_On_Yorke.png` },
+  { name: 'Robust Worx',                           logo: `${BASE}/Gold/Robust_Worx.png` },
+  { name: 'SportsPower',                           logo: `${BASE}/Gold/SportsPower.png` },
+  { name: 'St Mary MacKillop School',              logo: `${BASE}/Gold/St_Mary_MacKillop_School.png` },
+  { name: 'Wallaroo Metal Fabricators',            logo: `${BASE}/Gold/Wallaroo_Metal_Fabricators.png` },
+  { name: 'Weeroona Hotel',                        logo: `${BASE}/Gold/Weeroona_Hotel.png` },
+  { name: 'YP Linen Services',                     logo: `${BASE}/Gold/YP_Linen_Services.png` },
+  { name: 'YP Mini Diggers',                       logo: `${BASE}/Gold/YP_Mini_Diggers.png` },
+  // ── Silver ─────────────────────────────────────────────────
+  { name: 'Best Pizza',                            logo: `${BASE}/Silver/Best_Pizza.png` },
+  { name: 'Copper Coast Dental Wallaroo',          logo: `${BASE}/Silver/Copper_Coast_Dental_Wallaroo.png` },
+  { name: 'Drakes',                                logo: `${BASE}/Silver/Drakes.png` },
+  { name: 'Electrical NRG Solutions',              logo: `${BASE}/Silver/Electrical_NRG_Solutions.png` },
+  { name: 'Fletcher Family',                       logo: `${BASE}/Silver/Fletcher_Family.png` },
+  { name: 'Jeff White Mechanical',                 logo: `${BASE}/Silver/Jeff_White_Mechanical.png` },
+  { name: 'Kurlben Painting',                      logo: `${BASE}/Silver/Kurlben_Painting.png` },
+  { name: 'NYP Car Fix',                           logo: `${BASE}/Silver/NYP_Car_Fix.png` },
+  { name: 'Peninsula Toyota',                      logo: `${BASE}/Silver/Peninsula_Toyota.png` },
+  { name: 'Prince Edward Hotel',                   logo: `${BASE}/Silver/Prince_Edward_Hotel.png` },
+  { name: 'The Shores Eatery',                     logo: `${BASE}/Silver/The_Shores_Eatery.png` },
+  { name: 'Wallaroo Beachfront Tourist Park',      logo: `${BASE}/Silver/Wallaroo_Beachfront_Tourist_Park.png` },
+  { name: 'Wardle Co Real Estate',                 logo: `${BASE}/Silver/Wardle_Co_Real_Estate.png` },
+  { name: 'West Line Excavations',                 logo: `${BASE}/Silver/West_Line_Excavations.png` },
+  // ── Bronze ─────────────────────────────────────────────────
+  { name: 'Abraham Air Conditioning',              logo: `${BASE}/Bronze/Abraham_Air_Conditioning_&_Refrigeration.png` },
+  { name: 'Barossa Mitre 10',                      logo: `${BASE}/Bronze/Barossa_Mitre_10.png` },
+  { name: 'Burfitt Concrete',                      logo: `${BASE}/Bronze/Burfitt_Concrete.png` },
+  { name: 'Copper Coast Funerals',                 logo: `${BASE}/Bronze/Copper_Coast_Funerals.png` },
+  { name: 'Copper Coast Gas Supplies',             logo: `${BASE}/Bronze/Copper_Coast_Gas_Supplies.png` },
+  { name: 'Country Living Homes',                  logo: `${BASE}/Bronze/Country_Living_Homes.png` },
+  { name: 'Crafers Garden Centre',                 logo: `${BASE}/Bronze/Crafers_Garden_Centre.png` },
+  { name: 'Dunlop Kadina Tyres & Auto',            logo: `${BASE}/Bronze/Dunlop_Kadina_Tyres_&_Auto.png` },
+  { name: 'Elders Insurance',                      logo: `${BASE}/Bronze/Elders_Insurance.png` },
+  { name: 'Electrical Merchandising',              logo: `${BASE}/Bronze/Electrical_Merchandising.png` },
+  { name: 'Emmetts',                               logo: `${BASE}/Bronze/Emmetts.png` },
+  { name: 'Enfield Furnishers',                    logo: `${BASE}/Bronze/Enfield_Furnishers.png` },
+  { name: 'Format Concrete Pumping',               logo: `${BASE}/Bronze/Format_Concrete_Pumping.png` },
+  { name: "Jack's Septic Services",                logo: `${BASE}/Bronze/Jacks_Septic_Services.png` },
+  { name: 'Kadina Aluminium Products',             logo: `${BASE}/Bronze/Kadina_Aluminium_Products.png` },
+  { name: 'Kadina Retravision',                    logo: `${BASE}/Bronze/Kadina_Retravision.png` },
+  { name: "Keepin' it Clean",                      logo: `${BASE}/Bronze/Keepin_it_Clean.png` },
+  { name: 'KP Lawyers',                            logo: `${BASE}/Bronze/KP_Lawyers.png` },
+  { name: 'Larwoods Ag Services',                  logo: `${BASE}/Bronze/Larwoods_Ag_Services.png` },
+  { name: 'Loc It Self Storage',                   logo: `${BASE}/Bronze/Loc_It_Self_Storage.png` },
+  { name: 'MA Skinner Earthmoving',                logo: `${BASE}/Bronze/MA_Skinner_Earthmoving.png` },
+  { name: 'MEC',                                   logo: `${BASE}/Bronze/MEC.png` },
+  { name: 'Microsystems Support',                  logo: `${BASE}/Bronze/Microsystems_Support.png` },
+  { name: 'Nutrien Ag Solutions',                  logo: `${BASE}/Bronze/Nutrien_Ag_Solutions.png` },
+  { name: 'Peninsula Insurance',                   logo: `${BASE}/Bronze/Peninsula_Insurance.png` },
+  { name: 'Peninsula Nursery and Garden Centre',   logo: `${BASE}/Bronze/Peninsula_Nursery_and_Garden_Centre.png` },
+  { name: 'Ray White',                             logo: `${BASE}/Bronze/Ray_White.png` },
+  { name: 'Rosewarnes Kadina',                     logo: `${BASE}/Bronze/Rosewarnes_Kadina.png` },
+  { name: 'Seaside Vet Surgery',                   logo: `${BASE}/Bronze/Seaside_Vet_Surgery.png` },
+  { name: 'Steve McDonald Electrical',             logo: `${BASE}/Bronze/Steve_McDonald_Electrical.png` },
+  { name: 'Wallaroo Hotel',                        logo: `${BASE}/Bronze/Wallaroo_Hotel.png` },
+  { name: 'Williams Tints and Glass',              logo: `${BASE}/Bronze/Williams_Tints_and_Glass.jpg` },
+  { name: 'YP Energy Solutions',                   logo: `${BASE}/Bronze/YP_Energy_Solutions.png` },
+  { name: 'YP Fire and Safety',                    logo: `${BASE}/Bronze/YP_Fire_and_Safety.png` },
+  { name: 'YP Recycling',                          logo: `${BASE}/Bronze/YP_Recycling.png` },
+  { name: 'Yorke Peninsula Coaches',               logo: `${BASE}/Bronze/Yorke_Peninsula_Coaches.png` },
+  { name: 'Yorke Peninsula Country Times',         logo: `${BASE}/Bronze/Yorke_Peninsula_Country_Times.png` },
+  // ── Club ───────────────────────────────────────────────────
+  { name: 'A1 Auto Car Sales',                     logo: `${BASE}/Club/A1_Auto_Car_Sales.png` },
+  { name: 'AW Vater & Co',                         logo: `${BASE}/Club/AW_Vater_&_Co.png` },
+  { name: "Butch's Auto Detailing",                logo: `${BASE}/Club/Butchs_Auto_Detailing.png` },
+  { name: 'Eagle Surf',                            logo: `${BASE}/Club/Eagle_Surf.png` },
+  { name: 'G & J East',                            logo: `${BASE}/Club/G_&_J_East.png` },
+  { name: 'Geoff James Paving & Landscaping',      logo: `${BASE}/Club/Geoff_James_Paving_&_Landscaping.png` },
+  { name: 'Kadina Mitre 10',                       logo: `${BASE}/Club/Kadina_Mitre_10.png` },
+  { name: "Murphy's Crash & Towing",               logo: `${BASE}/Club/Murphys_Crash_&_Towing.png` },
+  { name: 'NYP Car Fix Service',                   logo: `${BASE}/Club/NYP_Car_Fix_Service.png` },
+  { name: 'Newbery Chemists Tim Gross & Partners', logo: `${BASE}/Club/Newbery_Chemists_Tim_Gross_&_Partners.png` },
+  { name: "Perry's",                               logo: `${BASE}/Club/Perrys.png` },
+  { name: 'Skinner Family Funerals',               logo: `${BASE}/Club/Skinner_Family_Funerals.png` },
+  { name: "The Mac's Beachfront Villas",           logo: `${BASE}/Club/The_Macs_Beachfront_Villas.png` },
+  { name: "Yorke's Meat & Smallgoods",             logo: `${BASE}/Club/Yorkes_Meat_&_Smallgoods.png` },
+];
+
+const platinumSponsors = sponsorEntries.filter(s => s.tier === 'platinum').sort(sortInTier);
+const vipGoldSponsors  = sponsorEntries.filter(s => s.tier === 'vip' || s.tier === 'gold').sort(sortInTier);
+const sponsorsForHomepage = [
+  { label: 'Platinum Sponsors',    platinum: true,  logos: platinumSponsors.map(s => s.name) },
+  { label: 'VIP & Gold Partners',  platinum: false, logos: vipGoldSponsors.map(s => s.name) },
+].filter(t => t.logos.length > 0);
+
+// ─────────────────────────────────────────────────────────────
+// 8. Social calendar — Supabase with YAML fallback
+// ─────────────────────────────────────────────────────────────
+let social: any[] = [];
+const { data: dbSocial } = await supabase
+  .from('social_events')
+  .select('*')
+  .order('event_date');
+
+if ((dbSocial ?? []).length > 0) {
+  social = (dbSocial ?? []).map(e => ({
+    round:       e.round,
+    date:        e.event_date,
+    timeRange:   e.time_range,
+    title:       e.title,
+    description: e.description,
+    location:    e.location,
+    icon:        e.icon,
+  }));
+} else {
+  social = (await getCollection('social')).map(e => e.data).sort((a: any, b: any) => a.round - b.round);
+}
+
+// ─────────────────────────────────────────────────────────────
+// 9. Events section
+// ─────────────────────────────────────────────────────────────
+const hostHere = finals.find((f: any) => f.hostHere);
+const featuredEvent = {
+  tag: 'Wallaroo Oval Hosts',
+  titleLine1: hostHere ? hostHere.name.replace(/Final$/, '').trim() : 'Second Semi',
+  titleLine2Italic: 'Final.',
+  body: "Wallaroo Oval has been awarded hosting rights for the YPFL Second Semi Final. The biggest crowd of the season — finals footy on home turf, regardless of who's playing.",
+  meta: hostHere ? [
+    { label: 'YPFL Finals',     value: hostHere.date },
+    { label: 'Cornish Terrace', value: hostHere.venue },
+    { label: '11:00 AM',        value: 'Gates open' },
+  ] : [],
+};
+
+const upcomingFixtureItems = fixtures
+  .filter((f: any) => f.status === 'now' || f.status === 'upcoming' || (!f.status && f.type === 'match'))
+  .slice(0, 2)
+  .map((f: any) => {
+    const dateStr = f.date ?? '';
+    const [, day, mon] = dateStr.match(/(\d+)\s+(\w+)/) ?? [, '', ''];
+    const isHome = f.venue === 'HOME' || f.is_home;
+    return {
+      day, mon,
+      title: `Round ${f.round} · ${isHome ? 'Home Game' : 'Away'}`,
+      desc: isHome
+        ? `Wallaroo v ${f.oppName} · Wallaroo Oval`
+        : `${f.oppName} v Wallaroo · ${f.venueDetail ?? f.oppName + ' Oval'} · ${site.nextMatchBounce?.toLowerCase()}`,
+      href: `/fixtures/#r${f.round}`,
+    };
+  });
+
+const upcomingEvents = [
+  ...upcomingFixtureItems,
+  ...(hostHere ? [{
+    day: String(hostHere.date).match(/(\d+)/)?.[1] ?? '',
+    mon: String(hostHere.date).match(/\b(\w{3})\b$/)?.[1] ?? '',
+    title: `★ ${hostHere.name}`,
+    desc: 'YPFL Finals · Wallaroo Oval hosts',
+    href: '/fixtures/#finals',
+  }] : []),
+];
+
+// ─────────────────────────────────────────────────────────────
+// 10. Schema.org
+// ─────────────────────────────────────────────────────────────
+const schema = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'SportsTeam',
+      '@id': 'https://wallaroofc.com.au/#team',
+      name: 'Wallaroo Football Club',
+      alternateName: ['Wallaroo Bulldogs', 'Wallaroo FC'],
+      sport: 'Australian rules football',
+      foundingDate: '1867-06-17',
+      memberOf: { '@type': 'SportsOrganization', name: 'Yorke Peninsula Football League' },
+      url: 'https://wallaroofc.com.au/',
+      email: 'admin@wallaroofc.com.au',
+      location: {
+        '@type': 'Place',
+        name: 'Wallaroo Oval',
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: 'Cornish Terrace',
+          addressLocality: 'Wallaroo',
+          addressRegion: 'SA',
+          postalCode: '5556',
+          addressCountry: 'AU',
+        },
+      },
+    },
+    {
+      '@type': 'LocalBusiness',
+      '@id': 'https://wallaroofc.com.au/#venue',
+      name: 'Wallaroo Football Club — Wallaroo Oval',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Cornish Terrace',
+        addressLocality: 'Wallaroo',
+        addressRegion: 'SA',
+        postalCode: '5556',
+        addressCountry: 'AU',
+      },
+      email: 'admin@wallaroofc.com.au',
+      url: 'https://wallaroofc.com.au/',
+    },
+  ],
+};
+---
+<Layout
+  title={`Wallaroo Football Club — Home of the Bulldogs · Round ${site.currentRound} vs ${site.nextMatchOpponentName}`}
+  description={`Founded 17 June 1867. Yorke Peninsula Football League. Round ${site.currentRound} — ${site.nextMatchDate} at ${site.nextMatchVenue}, ${site.nextMatchBounce} bounce.`}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+
+  <TopStrip round={site.currentRound} date={site.nextMatchDate} season={site.season} />
+  <Masthead />
+
+  <main id="main">
+  <Hero
+    round={site.currentRound}
+    homeOrAway={site.nextMatchHomeOrAway}
+    homeTeam={{ name: 'Wallaroo', record: site.ourRecord }}
+    awayTeam={{ slug: site.nextMatchOpponent, name: site.nextMatchOpponentName, record: site.nextMatchOpponentRecord }}
+    date={site.nextMatchDate}
+    bounce={site.nextMatchBounce}
+    venue={site.nextMatchVenue}
+    ribbonItems={ribbonItems}
+  />
+
+  <YPFLStrip />
+
+  <ResultsTicker results={tickerResults} />
+
+  <ThisWeek
+    round={site.currentRound}
+    afterRound={site.lastCompletedRound}
+    date={`Saturday ${String(site.currentDate).replace(/^Sat\s+/, '')}`}
+    venue={site.thisWeekVenue}
+    venueLabel={site.thisWeekVenueLabel}
+    fixtures={weekFixtures}
+    ladders={ladders}
+    news={news}
+    recentForm={recentForm}
+  />
+
+  <GameDayInfo />
+
+  <CanteenStrip />
+
+  <FullFixture fixtures={fixtures} finals={finals} />
+
+  <SocialCalendar entries={social} />
+
+  <JoinStrip />
+
+  <JuniorPathway />
+
+  <Volunteers />
+
+  <Heritage />
+
+  <PremiershipWall />
+
+  <Events featured={featuredEvent} events={upcomingEvents} />
+
+  <Gallery />
+
+  <Sponsors tiers={sponsorsForHomepage} />
+  </main>
+
+  <Footer />
+</Layout>

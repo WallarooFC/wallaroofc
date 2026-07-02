@@ -1,0 +1,320 @@
+---
+export const prerender = false;
+import { getCollection } from 'astro:content';
+import { supabase } from '../../lib/supabase';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+// Pull from Supabase
+const { data: dbResults } = await supabase
+  .from('results')
+  .select('*')
+  .eq('season', 2026)
+  .order('round', { ascending: false })
+  .order('grade');
+
+// Also grab last sync time
+const { data: syncRow } = await supabase
+  .from('site_config')
+  .select('value')
+  .eq('key', 'results_last_sync')
+  .maybeSingle();
+const lastSync = syncRow?.value ? new Date(syncRow.value) : null;
+
+// Group by round
+let rounds: any[] = [];
+
+if ((dbResults ?? []).length > 0) {
+  const byRound: Record<number, any[]> = {};
+  for (const r of dbResults ?? []) {
+    if (!byRound[r.round]) byRound[r.round] = [];
+    byRound[r.round].push(r);
+  }
+  rounds = Object.entries(byRound)
+    .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+    .map(([round, games]) => ({
+      round: parseInt(round),
+      date: games[0]?.match_date
+        ? new Date(games[0].match_date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+        : `Round ${round}`,
+      games: games.map(g => {
+        if (g.bye_team) return { id: g.playhq_id ?? g.id, grade: g.grade, byeTeam: g.bye_team };
+        const hs  = g.home_score ?? null;
+        const as_ = g.away_score ?? null;
+        const hasScores = hs !== null && as_ !== null;
+        const homeWon   = hasScores && hs > as_;
+        const drawn     = hasScores && hs === as_;
+        // Winner always displayed first; if no scores yet keep home first
+        const homeFirst = !hasScores || homeWon || drawn;
+        const margin    = hasScores && !drawn ? Math.abs(hs - as_) : null;
+        return {
+          id:        g.playhq_id ?? g.id,
+          grade:     g.grade,
+          homeName:  homeFirst ? g.home_team : g.away_team,
+          homeScore: homeFirst ? (hs !== null ? String(hs) : null) : (as_ !== null ? String(as_) : null),
+          awayName:  homeFirst ? g.away_team : g.home_team,
+          awayScore: homeFirst ? (as_ !== null ? String(as_) : null) : (hs !== null ? String(hs) : null),
+          margin:    margin !== null ? `${margin} pts` : null,
+          drawn,
+          homeFirst,   // tells the live-update script how to route home/away scores
+          byeTeam:   null,
+        };
+      }),
+    }));
+} else {
+  // YAML fallback
+  rounds = (await getCollection('results'))
+    .map(e => e.data)
+    .sort((a: any, b: any) => b.round - a.round);
+}
+
+const totalGames = rounds.reduce((sum, r) => sum + r.games.filter((g: any) => !g.byeTeam).length, 0);
+const latestRound = rounds[0]?.round ?? 0;
+
+// Server-side UTC Saturday detection (used for meta-refresh fallback)
+const nowUtc = new Date();
+const isUtcSaturday = nowUtc.getUTCDay() === 6;
+
+// Expose Supabase public credentials for client-side polling
+const supabaseUrl  = import.meta.env.PUBLIC_SUPABASE_URL;
+const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+---
+<PageLayout
+  title="Results · Wallaroo FC"
+  description="Round-by-round scorelines across the YPFL 2026 season."
+>
+  {/* Meta-refresh on Saturdays (UTC) as a safety net */}
+  {isUtcSaturday && <meta http-equiv="refresh" content="120" />}
+
+  <PageHero
+    eyebrow="2026 Season"
+    title="Round-by-round"
+    titleItalic="scorelines."
+    intro={`Every score, every grade, every round of the YPFL 2026 season. ${rounds.length} rounds played, ${totalGames} games on the board.`}
+  />
+
+  <section class="results-page">
+    <div class="container">
+
+      {/* Live indicator — shown client-side on Saturdays only */}
+      <div id="live-bar" class="live-bar" style="display:none">
+        <span class="live-dot"></span>
+        <span class="live-label">LIVE</span>
+        <span class="live-sub">Scores update automatically every 90 seconds</span>
+        <span id="live-countdown" class="live-countdown"></span>
+        <span id="live-status" class="live-status"></span>
+      </div>
+
+      {rounds.length === 0 && (
+        <p class="empty">No results published yet — check back after the first round.</p>
+      )}
+
+      {rounds.map((round: any) => (
+        <article class="round-block" id={`round-${round.round}`}>
+          <header>
+            <h2>Round {round.round}</h2>
+            <span class="date">{round.date}</span>
+          </header>
+          <div class="games">
+            {round.games.map((g: any) => g.byeTeam ? (
+              <div class="game game-bye">
+                <span class="grade">{g.grade}</span>
+                <span class="bye-team">{g.byeTeam} — bye</span>
+              </div>
+            ) : (
+              <div class="game" data-result-id={g.id} data-home-first={String(g.homeFirst !== false)}>
+                <span class="grade">{g.grade}</span>
+                <div class="scoreline">
+                  <span class="team winner-team">{g.homeName}</span>
+                  <span class="score-wrap">
+                    <span class="score" data-score="first">{g.homeScore ?? '—'}</span>
+                    <span class="score-sep">·</span>
+                    <span class="score" data-score="second">{g.awayScore ?? '—'}</span>
+                  </span>
+                  <span class="team loser-team">{g.awayName}</span>
+                </div>
+                {g.margin && <span class="margin" data-margin>by {g.margin}</span>}
+              </div>
+            ))}
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+</PageLayout>
+
+<script define:vars={{ supabaseUrl, supabaseAnon, latestRound }}>
+  // ── Match day detection ────────────────────────────────────────────────────
+  // YPFL plays on Saturdays. Use local browser time so SA viewers see LIVE
+  // from the moment their Saturday starts.
+  const now = new Date();
+  const dayLocal = now.getDay(); // 0=Sun … 6=Sat
+  const isMatchDay = dayLocal === 6;
+
+  if (!isMatchDay) {
+    // Not Saturday — nothing to do
+    // Leave the page as static SSR output
+  } else {
+    // ── Saturday: activate live mode ─────────────────────────────────────────
+    const liveBar = document.getElementById('live-bar');
+    if (liveBar) liveBar.style.display = 'flex';
+
+    const POLL_MS = 90_000; // 90 seconds
+    let secondsLeft = POLL_MS / 1000;
+    let pollTimer: ReturnType<typeof setInterval>;
+    let countdownTimer: ReturnType<typeof setInterval>;
+
+    const countdownEl = document.getElementById('live-countdown');
+    const statusEl    = document.getElementById('live-status');
+
+    function setStatus(msg: string) {
+      if (statusEl) statusEl.textContent = msg;
+    }
+
+    function startCountdown() {
+      secondsLeft = POLL_MS / 1000;
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(() => {
+        secondsLeft--;
+        if (countdownEl) countdownEl.textContent = `Next refresh in ${secondsLeft}s`;
+        if (secondsLeft <= 0) clearInterval(countdownTimer);
+      }, 1000);
+    }
+
+    // ── Fetch latest results directly from Supabase ──────────────────────────
+    async function fetchResults() {
+      try {
+        setStatus('Checking for updates…');
+        const url = `${supabaseUrl}/rest/v1/results` +
+          `?season=eq.2026&order=round.desc,grade.asc&select=*`;
+        const res = await fetch(url, {
+          headers: {
+            'apikey'       : supabaseAnon,
+            'Authorization': `Bearer ${supabaseAnon}`,
+          },
+        });
+
+        if (!res.ok) { setStatus(''); return; }
+        const data = await res.json();
+
+        // Check if a new round has appeared (reload to render new HTML blocks)
+        const maxRound = data.reduce((m: number, r: any) => Math.max(m, r.round ?? 0), 0);
+        if (maxRound > latestRound) {
+          setStatus('New round detected — reloading…');
+          window.location.reload();
+          return;
+        }
+
+        // Update existing score elements
+        let changed = 0;
+        for (const result of data) {
+          const id  = result.playhq_id ?? result.id;
+          const row = document.querySelector(`[data-result-id="${id}"]`);
+          if (!row || result.bye_team) continue;
+
+          // data-home-first tells us whether home score → first slot or second slot
+          const homeFirst = row.getAttribute('data-home-first') !== 'false';
+          const firstEl  = row.querySelector('[data-score="first"]');
+          const secondEl = row.querySelector('[data-score="second"]');
+
+          const rawHome = result.home_score !== null && result.home_score !== undefined
+            ? String(result.home_score) : '—';
+          const rawAway = result.away_score !== null && result.away_score !== undefined
+            ? String(result.away_score) : '—';
+
+          // Route: first slot = winner's score, second = loser's score
+          const newFirst  = homeFirst ? rawHome : rawAway;
+          const newSecond = homeFirst ? rawAway : rawHome;
+
+          function flashUpdate(el: Element | null, val: string) {
+            if (!el || el.textContent === val) return 0;
+            el.textContent = val;
+            el.classList.add('score-flash');
+            setTimeout(() => el.classList.remove('score-flash'), 1500);
+            return 1;
+          }
+          changed += flashUpdate(firstEl, newFirst);
+          changed += flashUpdate(secondEl, newSecond);
+
+          // Update margin
+          const marginEl = row.querySelector('[data-margin]') as HTMLElement | null;
+          if (marginEl && result.home_score !== null && result.away_score !== null) {
+            const margin = Math.abs((result.home_score ?? 0) - (result.away_score ?? 0));
+            marginEl.textContent = margin > 0 ? `by ${margin} pts` : 'drawn';
+          }
+        }
+
+        const t = new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+        setStatus(changed > 0 ? `Updated ${t}` : `Checked ${t} — no changes`);
+      } catch (_) {
+        setStatus('');
+      }
+    }
+
+    // Initial fetch + start polling
+    fetchResults();
+    startCountdown();
+
+    pollTimer = setInterval(() => {
+      fetchResults();
+      startCountdown();
+    }, POLL_MS);
+  }
+</script>
+
+<style>
+  .results-page { background: var(--cream); padding: 80px 32px 120px; }
+  .container { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── Live bar ── */
+  .live-bar {
+    align-items: center; gap: 12px; flex-wrap: wrap;
+    background: var(--blue-deep); color: var(--white);
+    padding: 12px 20px; border-radius: 4px;
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.1em;
+  }
+  .live-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #ff3b3b; flex-shrink: 0;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,59,59,0.6); }
+    50%       { opacity: 0.85; box-shadow: 0 0 0 6px rgba(255,59,59,0); }
+  }
+  .live-label { text-transform: uppercase; letter-spacing: 0.2em; font-size: 14px; color: #ff3b3b; font-weight: 700; }
+  .live-sub   { color: rgba(255,255,255,0.65); font-size: 11px; }
+  .live-countdown { color: rgba(255,255,255,0.5); font-size: 11px; margin-left: auto; }
+  .live-status    { color: rgba(255,255,255,0.7); font-size: 11px; }
+
+  /* ── Round blocks ── */
+  .round-block { background: var(--white); border-radius: 6px; border: 1px solid var(--line); border-left: 6px solid var(--red); overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 28px; background: var(--cream); border-bottom: 1px solid var(--line); }
+  header h2 { font-family: var(--display); font-size: 28px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blue-deep); }
+  .date { font-family: var(--headline); font-size: 13px; letter-spacing: 0.14em; color: var(--grey); text-transform: uppercase; }
+  .games { display: flex; flex-direction: column; }
+  .game { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px 28px; border-bottom: 1px solid var(--line); }
+  .game:last-child { border-bottom: none; }
+  .game-bye { background: rgba(20,49,92,0.04); }
+  .grade { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); min-width: 96px; }
+  .scoreline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1; }
+  .team { font-family: var(--display); font-size: 16px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--blue-deep); }
+  .score-wrap { display: flex; align-items: center; gap: 6px; }
+  .score {
+    font-family: var(--display); font-size: 20px; font-weight: 700;
+    color: var(--charcoal); min-width: 28px; text-align: center;
+    transition: color 0.3s;
+  }
+  .score-flash { color: var(--red) !important; }
+  .score-sep { color: var(--line); font-size: 18px; }
+  .margin { font-family: var(--serif); font-style: italic; color: var(--grey); font-size: 14px; }
+  .bye-team { font-family: var(--display); font-size: 16px; color: var(--grey); text-transform: uppercase; }
+  .empty { font-family: var(--serif); font-style: italic; color: var(--grey); text-align: center; padding: 64px; }
+
+  @media (max-width: 700px) {
+    .results-page { padding: 48px 24px; }
+    .grade { min-width: 0; flex-basis: 100%; }
+    .live-bar { gap: 8px; }
+    .live-countdown, .live-sub { display: none; }
+  }
+</style>

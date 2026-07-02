@@ -1,0 +1,100 @@
+---
+export const prerender = false;
+import { getCollection } from 'astro:content';
+import { supabase } from '../../lib/supabase';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+const { data: dbArticles } = await supabase
+  .from('news')
+  .select('*')
+  .eq('published', true)
+  .order('pinned', { ascending: false })
+  .order('published_at', { ascending: false });
+
+let articles: any[] = [];
+
+if ((dbArticles ?? []).length > 0) {
+  articles = (dbArticles ?? []).map(a => ({
+    slug:      a.slug,
+    title:     a.title,
+    category:  a.category,
+    date:      a.published_at ? new Date(a.published_at) : new Date(a.created_at),
+    summary:   a.body_md ? a.body_md.replace(/^#+\s.*/gm, '').replace(/\*{1,2}|_{1,2}/g, '').trim().substring(0, 160) : undefined,
+    pinned:    a.pinned,
+    href:      a.href,
+    imageUrl:  a.image_url,
+  }));
+} else {
+  const yamlArticles = await getCollection('news');
+  articles = yamlArticles
+    .sort((a, b) => {
+      if (a.data.pinned !== b.data.pinned) return (b.data.pinned ? 1 : 0) - (a.data.pinned ? 1 : 0);
+      return b.data.date.getTime() - a.data.date.getTime();
+    })
+    .map(a => ({
+      slug:     a.id,
+      title:    a.data.title,
+      category: a.data.category,
+      date:     a.data.date,
+      summary:  a.data.summary,
+      pinned:   a.data.pinned,
+      href:     a.data.href,
+    }));
+}
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+}
+---
+<PageLayout
+  title="News · Wallaroo FC"
+  description="Match reports, fixture previews, and club news from Wallaroo Football Club."
+>
+  <PageHero
+    eyebrow="News"
+    title="From the"
+    titleItalic="clubrooms."
+    intro="Match reports, fixture previews, and announcements straight from the committee."
+  />
+
+  <section class="news-list-page">
+    <div class="container">
+      <ul class="list">
+        {articles.map((a: any) => (
+          <li class="item">
+            <a href={a.href ?? `/news/${a.slug}/`} class="card" target={a.href ? '_blank' : undefined} rel={a.href ? 'noopener' : undefined}>
+              <div class="meta">
+                <span class="cat">{a.category}</span>
+                <span class="date">{fmtDate(a.date)}</span>
+                {a.pinned && <span class="pin">★ Pinned</span>}
+              </div>
+              <h2>{a.title}</h2>
+              {a.summary && <p>{a.summary}</p>}
+              <span class="readmore">{a.href ? 'Read more →' : 'Read article →'}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      {articles.length === 0 && (
+        <p class="empty">No news yet — check back soon.</p>
+      )}
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .news-list-page { background: var(--cream); padding: 80px 32px 120px; }
+  .container { max-width: 960px; margin: 0 auto; }
+  .list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+  .card { display: block; background: var(--white); padding: 32px 36px; border-radius: 6px; border-left: 4px solid var(--red); box-shadow: 0 2px 12px rgba(0,0,0,0.04); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); color: inherit; text-decoration: none; }
+  .card:hover { transform: translateX(6px); box-shadow: 0 8px 24px rgba(20,49,92,0.1); }
+  .meta { display: flex; gap: 16px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .cat { color: var(--red); }
+  .date { color: var(--grey); }
+  .pin { color: var(--blue-deep); font-weight: 600; }
+  h2 { font-family: var(--display); font-size: 26px; line-height: 1.1; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 12px; }
+  p { font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--charcoal); margin-bottom: 16px; }
+  .readmore { font-family: var(--headline); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 2px; }
+  .empty { font-family: var(--serif); font-style: italic; color: var(--grey); text-align: center; padding: 64px; }
+</style>

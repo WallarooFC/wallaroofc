@@ -1,0 +1,278 @@
+---
+import type { PagePermission } from '../lib/admin-pages';
+
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const pathname = Astro.url.pathname;
+
+const isAdmin: boolean     = Astro.locals.isAdmin     ?? false;
+const canEdit: boolean     = Astro.locals.canEdit      ?? false;
+const permissions: PagePermission[] = Astro.locals.permissions ?? [];
+
+const permMap = new Map(permissions.map(p => [p.page, p]));
+
+// All nav items — filtered below by permission
+const ALL_NAV = [
+  { href: '/admin',                key: 'dashboard',      label: 'Dashboard',       icon: '⊞' },
+  { href: '/admin/players',        key: 'players',        label: 'Players',         icon: '👥' },
+  { href: '/admin/qualifications', key: 'qualifications', label: 'Qualifications',  icon: '📋' },
+  { href: '/admin/roster',         key: 'roster',         label: 'Bar Roster',      icon: '🍺' },
+  { href: '/admin/canteen',        key: 'canteen',        label: 'Canteen Roster',  icon: '🥘' },
+  { href: '/admin/fixtures',       key: 'fixtures',       label: 'Fixtures',        icon: '📅' },
+  { href: '/admin/results',        key: 'results',        label: 'Results',         icon: '🏉' },
+  { href: '/admin/gallery',        key: 'gallery',        label: 'Gallery',         icon: '🖼' },
+  { href: '/admin/sponsors',       key: 'sponsors',       label: 'Sponsors',        icon: '🤝' },
+  { href: '/admin/news',           key: 'news',           label: 'News',            icon: '📰' },
+  { href: '/admin/secretary',      key: 'secretary',      label: 'Secretary',       icon: '📁' },
+  { href: '/admin/members',        key: 'members',        label: 'Committee',       icon: '👤' },
+  { href: '/admin/config',         key: 'config',         label: 'Site Settings',   icon: '⚙' },
+];
+
+// Filter: admins see everything; others only see pages where can_view = true
+// Dashboard is always visible
+const nav = ALL_NAV.filter(item => {
+  if (item.key === 'dashboard') return true;
+  if (isAdmin) return true;
+  return permMap.get(item.key)?.can_view === true;
+});
+
+// Annotate each item: can the current user edit it?
+const navWithEdit = nav.map(item => ({
+  ...item,
+  canEdit: isAdmin || item.key === 'dashboard' || permMap.get(item.key)?.can_edit === true,
+}));
+
+const profile = (Astro.locals.user as any)?.profile;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} — Wallaroo FC Admin</title>
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --admin-bg:     #0D1B2E;
+      --admin-sidebar:#081426;
+      --admin-card:   #0A1F3D;
+      --admin-border: rgba(255,255,255,0.08);
+      --admin-text:   #F0F4F8;
+      --admin-muted:  rgba(255,255,255,0.5);
+      --admin-red:    #C8102E;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--admin-bg);
+      color: var(--admin-text);
+      display: flex;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--admin-sidebar);
+      border-right: 1px solid var(--admin-border);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-brand {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--admin-border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-brand img { width: 36px; height: 36px; }
+    .sidebar-brand-text { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.05em; }
+    .sidebar-brand-sub  { font-size: 10px; color: var(--admin-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+    .sidebar-nav { padding: 12px 8px; flex: 1; }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--admin-muted);
+      text-decoration: none;
+      transition: all 0.15s;
+      margin-bottom: 2px;
+      position: relative;
+    }
+    .sidebar-nav a:hover { background: rgba(255,255,255,0.05); color: var(--admin-text); }
+    .sidebar-nav a.active { background: rgba(200,16,46,0.15); color: var(--admin-red); font-weight: 500; }
+    .sidebar-nav a .icon { width: 20px; text-align: center; font-style: normal; }
+
+    /* Read-only badge on nav items */
+    .nav-readonly {
+      margin-left: auto;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.06);
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
+
+    .sidebar-user {
+      padding: 14px 16px;
+      border-top: 1px solid var(--admin-border);
+      border-bottom: 1px solid var(--admin-border);
+    }
+    .sidebar-user-name  { font-size: 13px; font-weight: 600; color: var(--admin-text); }
+    .sidebar-user-title { font-size: 11px; color: var(--admin-muted); margin-top: 1px; }
+    .sidebar-user-badge {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: rgba(200,16,46,0.2);
+      color: var(--admin-red);
+    }
+
+    .sidebar-footer { padding: 16px; }
+    .logout-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--admin-border);
+      color: var(--admin-muted);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { border-color: var(--admin-red); color: var(--admin-red); }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--admin-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .topbar h1   { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 0.05em; }
+    .readonly-banner {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,200,0,0.8);
+      background: rgba(255,200,0,0.08);
+      border: 1px solid rgba(255,200,0,0.2);
+      border-radius: 4px;
+      padding: 4px 10px;
+    }
+    .topbar-right { font-size: 13px; color: var(--admin-muted); }
+
+    .content { padding: 32px; flex: 1; overflow-y: auto; }
+
+    /* Access denied banner */
+    .denied-banner {
+      background: rgba(200,16,46,0.1);
+      border: 1px solid rgba(200,16,46,0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #f87171;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .denied-banner.visible { display: block; }
+
+    a { color: inherit; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="/favicon.svg" alt="" />
+      <div>
+        <div class="sidebar-brand-text">Wallaroo FC</div>
+        <div class="sidebar-brand-sub">Committee Portal</div>
+      </div>
+    </div>
+
+    {profile && (
+      <div class="sidebar-user">
+        <div class="sidebar-user-name">{profile.full_name}</div>
+        {profile.title && <div class="sidebar-user-title">{profile.title}</div>}
+        {isAdmin && <span class="sidebar-user-badge">Admin</span>}
+      </div>
+    )}
+
+    <nav class="sidebar-nav">
+      {navWithEdit.map(item => (
+        <a href={item.href} class={pathname === item.href ? 'active' : ''}>
+          <span class="icon">{item.icon}</span>
+          {item.label}
+          {!item.canEdit && item.key !== 'dashboard' && (
+            <span class="nav-readonly">View</span>
+          )}
+        </a>
+      ))}
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="logout-btn" id="logout-btn">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>{title}</h1>
+        {!canEdit && (
+          <span class="readonly-banner">👁 View only</span>
+        )}
+      </div>
+      <div class="topbar-right">Wallaroo FC · 2026 Season</div>
+    </div>
+    <div class="content">
+      <div class="denied-banner" id="denied-banner">
+        You don't have access to that page.
+      </div>
+      <slot />
+    </div>
+  </div>
+
+  <script>
+    // Show denied banner if redirected with ?denied=1
+    if (new URLSearchParams(location.search).get('denied') === '1') {
+      const b = document.getElementById('denied-banner');
+      if (b) b.classList.add('visible');
+    }
+
+    document.getElementById('logout-btn')?.addEventListener('click', () => {
+      document.cookie = 'sb-access-token=; path=/; max-age=0';
+      document.cookie = 'sb-refresh-token=; path=/; max-age=0';
+      window.location.href = '/admin/login';
+    });
+  </script>
+</body>
+</html>

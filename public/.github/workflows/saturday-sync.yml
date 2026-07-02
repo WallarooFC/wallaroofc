@@ -1,0 +1,18 @@
+name: Saturday Results & Ladder Sync
+
+# Runs every 15 min on Saturdays 10:15am–6:00pm ACST (00:45–08:30 UTC)
+on:
+  schedule:
+    - cron: '45 0 * * 6'
+    - cron: '0,15,30,45 1-7 * * 6'
+    - cron: '0,15,30 8 * * 6'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger results and ladder sync
+        run: |
+          curl -s -X POST "https://wallaroo-fc.vercel.app/api/sync/results-and-ladder" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

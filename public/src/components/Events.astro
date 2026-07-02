@@ -1,0 +1,103 @@
+---
+interface EventItem {
+  day: string;
+  mon: string;
+  title: string;
+  desc: string;
+  href: string;
+}
+
+interface FeaturedEvent {
+  tag: string;
+  titleLine1: string;
+  titleLine2Italic: string;
+  body: string;
+  meta: { label: string; value: string }[];
+}
+
+interface Props {
+  featured: FeaturedEvent;
+  events: EventItem[];
+}
+
+const { featured, events } = Astro.props;
+---
+<section class="events" aria-labelledby="events-heading">
+  <div class="container">
+    <div class="section-header reveal">
+      <div>
+        <div class="section-eyebrow">What's on</div>
+        <h2 class="section-title" id="events-heading">Beyond the <span class="ital">boundary line</span></h2>
+      </div>
+      <a href="/social/" class="section-link">All events →</a>
+    </div>
+
+    <div class="events-grid">
+      <article class="event-feature reveal">
+        <span class="tag">★ {featured.tag}</span>
+        <div>
+          <h3>{featured.titleLine1}<span class="ital">{featured.titleLine2Italic}</span></h3>
+          <p>{featured.body}</p>
+        </div>
+        <div class="meta">
+          {featured.meta.map(m => (
+            <div><strong>{m.value}</strong>{m.label}</div>
+          ))}
+        </div>
+      </article>
+
+      <div class="events-list">
+        {events.map((e, i) => (
+          <a class={`event-item reveal reveal-delay-${(i + 1) % 4}`} href={e.href}>
+            <div class="event-date"><div class="day">{e.day}</div><div class="mon">{e.mon}</div></div>
+            <div class="event-info"><h4>{e.title}</h4><div class="desc">{e.desc}</div></div>
+            <div class="event-arrow" aria-hidden="true">→</div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .events { background: var(--cream); padding: 120px 32px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 64px; gap: 32px; flex-wrap: wrap; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .section-title { font-family: var(--display); font-size: clamp(48px, 6vw, 88px); line-height: 0.92; color: var(--blue-deep); text-transform: uppercase; }
+  .section-title .ital { font-family: var(--serif); font-style: italic; font-weight: 400; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+  .section-link { font-family: var(--headline); font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue-deep); border-bottom: 3px solid var(--red); padding-bottom: 4px; }
+
+  .events-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 32px; }
+  .event-feature { background: var(--blue-darkest); color: var(--white); padding: 64px 56px; border-radius: 6px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; min-height: 480px; border-top: 6px solid var(--red); }
+  .event-feature::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 30%, rgba(200,16,46,0.25) 0%, transparent 60%); }
+  .event-feature::after { content: 'FINALS'; position: absolute; right: -40px; bottom: -100px; font-family: var(--display); font-size: 360px; color: rgba(200,16,46,0.18); line-height: 0.85; pointer-events: none; }
+  .event-feature > * { position: relative; z-index: 2; }
+  .event-feature .tag { display: inline-flex; align-items: center; gap: 8px; background: var(--red); color: var(--white); font-family: var(--headline); font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 16px; border-radius: 3px; margin-bottom: 28px; align-self: flex-start; }
+  .event-feature h3 { font-family: var(--display); font-size: 80px; line-height: 0.9; margin-bottom: 20px; text-transform: uppercase; }
+  .event-feature h3 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; display: block; }
+  .event-feature p { font-family: var(--serif); font-size: 18px; line-height: 1.6; max-width: 480px; color: rgba(255,255,255,0.85); margin-bottom: 36px; }
+  .event-feature .meta { display: flex; gap: 40px; font-family: var(--headline); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.6); border-top: 1px solid rgba(255,255,255,0.15); padding-top: 24px; flex-wrap: wrap; }
+  .event-feature .meta strong { display: block; color: var(--white); font-family: var(--display); font-size: 22px; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+  .events-list { display: flex; flex-direction: column; gap: 14px; }
+  .event-item { background: var(--white); padding: 24px 28px; border-radius: 4px; display: grid; grid-template-columns: 76px 1fr auto; gap: 24px; align-items: center; border-left: 4px solid var(--red); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.03); }
+  .event-item:hover { transform: translateX(8px); box-shadow: 0 8px 30px rgba(20,49,92,0.12); border-left-color: var(--blue-deep); }
+  .event-date { text-align: center; border-right: 1px solid var(--line); padding-right: 20px; }
+  .event-date .day { font-family: var(--display); font-size: 44px; color: var(--blue-deep); line-height: 1; }
+  .event-date .mon { font-family: var(--headline); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-top: 4px; }
+  .event-info h4 { font-family: var(--display); font-size: 22px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--blue-deep); margin-bottom: 6px; }
+  .event-info .desc { font-size: 14px; color: var(--grey); line-height: 1.5; }
+  .event-arrow { font-family: var(--display); font-size: 26px; color: var(--red); transition: transform 0.3s; }
+  .event-item:hover .event-arrow { transform: translateX(6px); }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+
+  @media (max-width: 1100px) { .events-grid { grid-template-columns: 1fr; } .event-feature h3 { font-size: 56px; } .event-feature { padding: 48px 32px; } }
+  @media (max-width: 700px) { .events { padding: 80px 24px; } }
+</style>

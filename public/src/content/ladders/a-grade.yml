@@ -1,0 +1,69 @@
+grade: A-Grade
+order: 1
+afterRound: 5
+columns: pct
+rows:
+  - pos: 1
+    slug: kadina
+    team: Kadina
+    p: 4
+    w: 4
+    l: 0
+    pct: '71.14'
+  - pos: 2
+    slug: cms
+    team: CMS Crows
+    p: 5
+    w: 4
+    l: 1
+    pct: '64.88'
+  - pos: 3
+    slug: paskeville
+    team: Paskeville
+    p: 5
+    w: 4
+    l: 1
+    pct: '63.87'
+  - pos: 4
+    slug: moonta
+    team: Moonta
+    p: 4
+    w: 3
+    l: 1
+    pct: '59.23'
+  - pos: 5
+    slug: southern-eagles
+    team: Sthn Eagles
+    p: 5
+    w: 2
+    l: 3
+    pct: '58.08'
+  - pos: 6
+    slug: bute
+    team: Bute
+    p: 5
+    w: 1
+    l: 4
+    pct: '47.50'
+  - pos: 7
+    slug: central-yorke
+    team: Cent. Yorke
+    p: 4
+    w: 1
+    l: 3
+    pct: '45.79'
+  - pos: 8
+    slug: wallaroo
+    team: Wallaroo
+    p: 4
+    w: 1
+    l: 3
+    pct: '28.43'
+    highlight: true
+  - pos: 9
+    slug: ardrossan
+    team: Ardrossan
+    p: 4
+    w: 0
+    l: 4
+    pct: '5.47'

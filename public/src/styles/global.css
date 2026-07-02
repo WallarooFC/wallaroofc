@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* ============================================
+   DESIGN TOKENS — Wallaroo FC brand system
+   Source: wallaroo_homepage_v14.html (committee-approved Apr 2026)
+   ============================================ */
+
+@theme {
+  --color-brand-red: #C8102E;
+  --color-brand-red-deep: #8E0B20;
+  --color-brand-blue: #14315C;
+  --color-brand-blue-deep: #0A1F3D;
+  --color-brand-blue-darkest: #050E1F;
+  --color-brand-cream: #F5F1E8;
+  --color-brand-charcoal: #15171C;
+  /* Darkened from #6B6F76 to clear WCAG AA 4.5:1 against --cream at small sizes. */
+  --color-brand-grey: #595D63;
+  --color-brand-line: #DAD3C2;
+
+  --font-display: "Anton", Impact, sans-serif;
+  --font-headline: "Bebas Neue", sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-oswald: "Oswald", system-ui, sans-serif;
+}
+
+/* Legacy short-name aliases for component CSS ported from v14 */
+:root {
+  --red: var(--color-brand-red);
+  --red-deep: var(--color-brand-red-deep);
+  --blue: var(--color-brand-blue);
+  --blue-deep: var(--color-brand-blue-deep);
+  --blue-darkest: var(--color-brand-blue-darkest);
+  --white: #FFFFFF;
+  --cream: var(--color-brand-cream);
+  --charcoal: var(--color-brand-charcoal);
+  --grey: var(--color-brand-grey);
+  --line: var(--color-brand-line);
+  --display: var(--font-display);
+  --headline: var(--font-headline);
+  --serif: var(--font-serif);
+  --body: var(--font-body);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--body);
+  background: var(--cream);
+  color: var(--charcoal);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; border: none; cursor: pointer; background: transparent; }
+
+/* Skip rendering large below-the-fold sections until they scroll near the viewport.
+   Cuts main-thread work and improves LCP/Speed Index. The intrinsic-size hint
+   prevents the page from "popping" as elements come into view. */
+.fixture-section, .social-calendar, .pathway, .volunteers, .heritage,
+.premiership-wall, .events, .gallery, .sponsors, footer {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 1200px;
+}
+
+/* Respect reduced-motion preference for the v14 animation set */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

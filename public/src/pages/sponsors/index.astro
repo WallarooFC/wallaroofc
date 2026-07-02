@@ -1,0 +1,381 @@
+---
+export const prerender = false;
+import { getCollection } from 'astro:content';
+import { supabase } from '../../lib/supabase';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+const { data: dbSponsors } = await supabase
+  .from('sponsors')
+  .select('*')
+  .eq('active', true)
+  .order('display_order')
+  .order('name');
+
+let sponsors: any[] = [];
+if ((dbSponsors ?? []).length > 0) {
+  sponsors = (dbSponsors ?? []).map(s => ({
+    name:  s.name,
+    tier:  s.tier,
+    order: s.display_order,
+    url:   s.website,
+  }));
+} else {
+  sponsors = (await getCollection('sponsors')).map(e => e.data);
+}
+
+// Clean logo files — simple marks/wordmarks, no overlay text
+const logoMap: Record<string, string> = {
+  // Pre-existing clean logos
+  'T-Ports':                          '/sponsors/tports.png',
+  'Leanic Civil':                     '/sponsors/leanic.png',
+  'Murray Pest Control':              '/sponsors/murray-pest.png',
+  'Subway':                           '/sponsors/subway.png',
+  'Spencer Gulf Searoad':             '/sponsors/spencer-gulf-searoad.png',
+  'Wallaroo Alehouse':                '/sponsors/coopers-alehouse.png',
+  'WFI':                              '/sponsors/wfi.png',
+  'Gunnings':                         '/sponsors/gunnings.png',
+  'Bond Store Wallaroo':              '/sponsors/bond-store.png',
+  'McDonalds':                        '/sponsors/mcdonalds.png',
+  'Kadina McDonalds':                 '/sponsors/mcdonalds.png',
+  'Forty Winks':                      '/sponsors/forty-winks.png',
+  'Real Estate On Yorke':             '/sponsors/real-estate-on-yorke.jpg',
+  'SportsPower Kadina':               '/sponsors/sportspower.png',
+  'Wallaroo Hotel':                   '/sponsors/wallaroo-hotel.png',
+  'Wallaroo Beachfront Tourist Park': '/sponsors/wallaroo-tourist-park.png',
+  'Wardle Co':                        '/sponsors/wardle-co.png',
+  'YP Energy Solutions':              '/sponsors/yp-energy.png',
+  // Sourced from business websites
+  'Anglers Inn':                      '/sponsors/anglers-inn.png',
+  'AW Vater & Co':                    '/sponsors/aw-vater.png',
+  'Enfield Furnishers':               '/sponsors/enfield-furnishers.jpg',
+  'Hello World Kadina':               '/sponsors/hello-world.svg',
+  'Jeff White Mechanical':            '/sponsors/jeff-white-mechanical.png',
+  'Kadina Mitre 10':                  '/sponsors/kadina-mitre10.svg',
+  'KP Lawyers':                       '/sponsors/kp-lawyers.jpg',
+  'Larwood Ag Services':              '/sponsors/larwood-ag.png',
+  'Newbery Chemists':                 '/sponsors/newbery-chemists.png',
+  'Poona Crushing and Gravel':        '/sponsors/poona-crushing.jpg',
+  'Shippy Hardware':                  '/sponsors/shippy-hardware.png',
+};
+
+// WFC 2026 acknowledgment cards — fallback when no clean logo file exists
+const cardMap: Record<string, string> = {
+  'All Creeks':                       '/sponsors/WFC_2026_Sponsor_Logos/Gold/All_Creeks.png',
+  "Angler's Inn":                     '/sponsors/WFC_2026_Sponsor_Logos/Gold/Anglers_Inn.png',
+  'BHS':                              '/sponsors/WFC_2026_Sponsor_Logos/Gold/BHS_Rep-Eng.png',
+  'Cornucopia Hotel':                 '/sponsors/WFC_2026_Sponsor_Logos/Major/Cornucopia_Hotel.jpg',
+  'Fence It YP':                      '/sponsors/WFC_2026_Sponsor_Logos/Gold/Fence_It_YP.png',
+  'Guns & Buns':                      '/sponsors/WFC_2026_Sponsor_Logos/Gold/Guns_N_Buns.png',
+  'Hallett Concrete':                 '/sponsors/WFC_2026_Sponsor_Logos/Major/Hallett_Group.png',
+  'Poona Crushing and Gravel':        '/sponsors/WFC_2026_Sponsor_Logos/Gold/Poona_Crushing_and_Gravel.png',
+  'Robust Worx':                      '/sponsors/WFC_2026_Sponsor_Logos/Gold/Robust_Worx.png',
+  'Shippy Hardware':                  '/sponsors/WFC_2026_Sponsor_Logos/Major/Shippy_Hardware.png',
+  'St Mary Mackillop School':         '/sponsors/WFC_2026_Sponsor_Logos/Gold/St_Mary_MacKillop_School.png',
+  'T.R Depledge Gardening':           '/sponsors/WFC_2026_Sponsor_Logos/Major/TR_Depledge_Gardening_%26_Maintenance.png',
+  'Wallaroo Metal Fabricators':       '/sponsors/WFC_2026_Sponsor_Logos/Gold/Wallaroo_Metal_Fabricators.png',
+  'Weeroona Hotel':                   '/sponsors/WFC_2026_Sponsor_Logos/Gold/Weeroona_Hotel.png',
+  'Fat G\'s':                         '/sponsors/WFC_2026_Sponsor_Logos/Major/Fat_Gs.png',
+  'Best Pizza':                       '/sponsors/WFC_2026_Sponsor_Logos/Silver/Best_Pizza.png',
+  'C & S Fletcher':                   '/sponsors/WFC_2026_Sponsor_Logos/Silver/Fletcher_Family.png',
+  'Electrical NRG Solutions':         '/sponsors/WFC_2026_Sponsor_Logos/Silver/Electrical_NRG_Solutions.png',
+  'Jeff White Mechanical':            '/sponsors/WFC_2026_Sponsor_Logos/Silver/Jeff_White_Mechanical.png',
+  'Kurlben Pty Ltd':                  '/sponsors/WFC_2026_Sponsor_Logos/Silver/Kurlben_Painting.png',
+  'NYP Car Fix':                      '/sponsors/WFC_2026_Sponsor_Logos/Silver/NYP_Car_Fix.png',
+  'Prince Edward Hotel':              '/sponsors/WFC_2026_Sponsor_Logos/Silver/Prince_Edward_Hotel.png',
+  'Shores Eatery':                    '/sponsors/WFC_2026_Sponsor_Logos/Silver/The_Shores_Eatery.png',
+  'Wallaroo Beachfront Tourist Park': '/sponsors/WFC_2026_Sponsor_Logos/Silver/Wallaroo_Beachfront_Tourist_Park.png',
+  'Burfit Concrete':                  '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Burfitt_Concrete.png',
+  'Country Living Homes':             '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Country_Living_Homes.png',
+  'Enfield Furnishers':               '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Enfield_Furnishers.png',
+  'Format Concrete':                  '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Format_Concrete_Pumping.png',
+  'Jacks Septics':                    '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Jacks_Septic_Services.png',
+  'KP Lawyers':                       '/sponsors/WFC_2026_Sponsor_Logos/Bronze/KP_Lawyers.png',
+  'Kadina Tyres and Auto':            '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Dunlop_Kadina_Tyres_%26_Auto.png',
+  'Keepin it Clean':                  '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Keepin_it_Clean.png',
+  'Larwood Ag Services':              '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Larwoods_Ag_Services.png',
+  'MA Skinner':                       '/sponsors/WFC_2026_Sponsor_Logos/Bronze/MA_Skinner_Earthmoving.png',
+  'Seaside Vet':                      '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Seaside_Vet_Surgery.png',
+  'Shaun Miller Ray White':           '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Ray_White.png',
+  'Steve McDonald Electrical':        '/sponsors/WFC_2026_Sponsor_Logos/Bronze/Steve_McDonald_Electrical.png',
+  'YP Fire and Safety':               '/sponsors/WFC_2026_Sponsor_Logos/Bronze/YP_Fire_and_Safety.png',
+  'AW Vater & Co':                    '/sponsors/WFC_2026_Sponsor_Logos/Club/AW_Vater_%26_Co.png',
+  'G & J East':                       '/sponsors/WFC_2026_Sponsor_Logos/Club/G_%26_J_East.png',
+  'Kadina Mitre 10':                  '/sponsors/WFC_2026_Sponsor_Logos/Club/Kadina_Mitre_10.png',
+  'Newbery Chemists':                 '/sponsors/WFC_2026_Sponsor_Logos/Club/Newbery_Chemists_Tim_Gross_%26_Partners.png',
+};
+
+sponsors = sponsors.map((s: any) => ({
+  ...s,
+  logo: logoMap[s.name] ?? cardMap[s.name],
+}));
+
+const tiers: ('platinum' | 'vip' | 'gold' | 'silver' | 'bronze')[] = ['platinum', 'vip', 'gold', 'silver', 'bronze'];
+
+const tierMeta: Record<typeof tiers[number], { label: string; description: string; minCard: string }> = {
+  platinum: { label: 'Platinum',  description: 'Principal Sponsors',  minCard: '220px' },
+  vip:      { label: 'VIP',       description: 'Major Sponsors',      minCard: '190px' },
+  gold:     { label: 'Gold',      description: 'Gold Sponsors',       minCard: '160px' },
+  silver:   { label: 'Silver',    description: 'Silver Sponsors',     minCard: '140px' },
+  bronze:   { label: 'Bronze',    description: 'Bronze Sponsors',     minCard: '130px' },
+};
+
+const byTier = Object.fromEntries(tiers.map(t => [
+  t,
+  sponsors
+    .filter((s: any) => s.tier === t)
+    .sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name)),
+]));
+---
+<PageLayout
+  title="Sponsors & Partners · Wallaroo FC"
+  description="2026 Wallaroo FC sponsors across Platinum, VIP, Gold, Silver and Bronze tiers — plus our sponsor prospectus."
+>
+  <PageHero
+    eyebrow="2026 Partners"
+    title="Built by the"
+    titleItalic="community."
+    intro="Five tiers. 70+ active partners. Every Bulldogs jumper, boundary sign, and programme is made possible by businesses across the Yorke Peninsula."
+  />
+
+  <section class="tiers">
+    <div class="container">
+      {tiers.map(tier => byTier[tier].length > 0 && (
+        <div class={`tier tier-${tier}`}>
+          <div class="tier-header">
+            <div class="tier-badge">{tierMeta[tier].label}</div>
+            <div class="tier-info">
+              <span class="tier-description">{tierMeta[tier].description}</span>
+              <span class="tier-count">{byTier[tier].length} partner{byTier[tier].length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <div class="grid" style={`grid-template-columns: repeat(auto-fill, minmax(${tierMeta[tier].minCard}, 1fr))`}>
+            {(byTier[tier] as any[]).map(s => (
+              s.url ? (
+                <a href={s.url} class="sponsor" target="_blank" rel="noopener noreferrer">
+                  <div class="logo-box">
+                    {s.logo
+                      ? <img src={s.logo} alt={s.name} loading="lazy" decoding="async" />
+                      : <span class="initials">{s.name.split(' ').slice(0,2).map((w: string) => w[0]).join('')}</span>
+                    }
+                  </div>
+                  <span class="sponsor-name">{s.name}</span>
+                </a>
+              ) : (
+                <div class="sponsor">
+                  <div class="logo-box">
+                    {s.logo
+                      ? <img src={s.logo} alt={s.name} loading="lazy" decoding="async" />
+                      : <span class="initials">{s.name.split(' ').slice(0,2).map((w: string) => w[0]).join('')}</span>
+                    }
+                  </div>
+                  <span class="sponsor-name">{s.name}</span>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="prospectus">
+    <div class="container">
+      <div class="block">
+        <h2>Become a 2026 sponsor</h2>
+        <p>Five tiers from $250 Bronze to $5,000 Platinum. Each tier comes with a published commitment: jumper placement, boundary signage, programme listings, social-media credits, and reserved hospitality at home games.</p>
+        <p>The 2026 prospectus details every benefit and price point. Download it as a PDF or email us to start the conversation — we'll match the right tier to your business.</p>
+        <div class="ctas">
+          <a class="btn-primary" href="/assets/wallaroo-fc-sponsor-prospectus-2026.pdf"><span>Download prospectus (PDF)</span></a>
+          <a class="btn-ghost" href="#enquire"><span>Email us</span></a>
+        </div>
+      </div>
+
+      <form
+        id="enquire"
+        class="enquire-form"
+        action="https://formspree.io/f/FORMSPREE_SPONSOR_FORM_ID"
+        method="POST"
+      >
+        <h3>Sponsor enquiry</h3>
+        <label>Business name <input type="text" name="business" required /></label>
+        <label>Your name <input type="text" name="name" required /></label>
+        <label>Email <input type="email" name="email" required /></label>
+        <label>Phone <input type="tel" name="phone" /></label>
+        <label>Interested tier
+          <select name="tier">
+            <option value="">— select —</option>
+            <option value="platinum">Platinum ($5,000)</option>
+            <option value="vip">VIP ($3,000)</option>
+            <option value="gold">Gold ($2,000)</option>
+            <option value="silver">Silver ($1,000)</option>
+            <option value="bronze">Bronze ($250)</option>
+            <option value="unsure">Not sure — please advise</option>
+          </select>
+        </label>
+        <label>Message (optional)
+          <textarea name="message" rows="4"></textarea>
+        </label>
+        <input type="text" name="_gotcha" class="honeypot" tabindex="-1" autocomplete="off" aria-label="Leave this field empty" />
+        <input type="hidden" name="_subject" value="Wallaroo FC sponsor enquiry (website)" />
+        <button class="btn-primary" type="submit"><span>Send enquiry</span></button>
+        <p class="form-note">We'll get back to you within a week. Your details are emailed to admin@wallaroofc.com.au and never shared elsewhere.</p>
+      </form>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  /* ── Page sections ── */
+  .tiers { background: var(--white); padding: 80px 32px 100px; }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  /* ── Tier dividers ── */
+  .tier {
+    padding: 64px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .tier:last-child { border-bottom: none; }
+
+  /* ── Tier header ── */
+  .tier-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 40px;
+  }
+  .tier-badge {
+    font-family: var(--headline);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--white);
+    background: var(--red);
+    padding: 6px 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .tier-platinum .tier-badge { background: #8B6914; }
+  .tier-vip      .tier-badge { background: var(--blue-deep); }
+  .tier-gold     .tier-badge { background: #B8860B; }
+  .tier-silver   .tier-badge { background: #6B7280; }
+  .tier-bronze   .tier-badge { background: #8B5E3C; }
+
+  .tier-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .tier-description {
+    font-family: var(--headline);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    line-height: 1;
+  }
+  .tier-count {
+    font-family: var(--headline);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+
+  /* ── Grid ── */
+  .grid {
+    display: grid;
+    gap: 20px;
+  }
+
+  /* ── Individual sponsor tile ── */
+  .sponsor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    cursor: default;
+  }
+  a.sponsor { cursor: pointer; }
+
+  .logo-box {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  a.sponsor:hover .logo-box {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    transform: translateY(-3px);
+  }
+
+  .logo-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* Placeholder for sponsors without a logo file */
+  .initials {
+    font-family: var(--headline);
+    font-size: clamp(18px, 3vw, 28px);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+    background: var(--blue-deep);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+  }
+
+  .sponsor-name {
+    font-family: var(--headline);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--charcoal);
+    text-align: center;
+    line-height: 1.4;
+    padding: 0 4px;
+  }
+  a.sponsor:hover .sponsor-name { color: var(--red); }
+
+  /* ── Prospectus & enquiry ── */
+  .prospectus { background: var(--cream); padding: 80px 32px 120px; }
+  .prospectus .container { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; max-width: 1200px; }
+  .block h2 { font-family: var(--display); font-size: clamp(32px, 4vw, 56px); color: var(--blue-deep); text-transform: uppercase; line-height: 1; margin-bottom: 24px; }
+  .block p { font-family: var(--serif); font-size: 18px; line-height: 1.65; color: var(--charcoal); margin-bottom: 20px; }
+  .ctas { display: flex; gap: 14px; margin-top: 24px; flex-wrap: wrap; }
+  .btn-primary { background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--red); transition: all 0.3s; cursor: pointer; }
+  .btn-primary:hover { background: var(--red-deep); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(200,16,46,0.3); }
+  .btn-ghost { background: transparent; color: var(--blue-deep); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--blue-deep); transition: all 0.3s; }
+  .btn-ghost:hover { background: var(--blue-deep); color: var(--white); }
+  .enquire-form { background: var(--white); padding: 40px 36px; border-radius: 6px; border-top: 4px solid var(--red); display: flex; flex-direction: column; gap: 16px; }
+  .enquire-form h3 { font-family: var(--display); font-size: 24px; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.04em; }
+  .enquire-form label { display: flex; flex-direction: column; font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); gap: 6px; }
+  .enquire-form input, .enquire-form select, .enquire-form textarea { padding: 12px 14px; font-family: var(--body); font-size: 15px; border: 1px solid var(--line); border-radius: 4px; background: var(--cream); color: var(--charcoal); transition: border-color 0.2s; }
+  .enquire-form input:focus, .enquire-form select:focus, .enquire-form textarea:focus { outline: none; border-color: var(--red); }
+  .enquire-form .honeypot { position: absolute; left: -9999px; }
+  .form-note { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--grey); margin-top: 8px; }
+  .enquire-form button { align-self: flex-start; margin-top: 8px; }
+
+  @media (max-width: 900px) {
+    .prospectus .container { grid-template-columns: 1fr; }
+    .prospectus, .tiers { padding: 48px 20px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important; gap: 14px; }
+    .tier { padding: 48px 0; }
+  }
+</style>

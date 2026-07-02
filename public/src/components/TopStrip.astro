@@ -1,0 +1,37 @@
+---
+interface Props {
+  round: number;
+  date: string; // e.g. "Sat 16 May"
+  season?: number;
+}
+const { round, date, season = 2026 } = Astro.props;
+---
+<div class="topstrip">
+  <div class="topstrip-inner">
+    <div class="topstrip-left">
+      <span class="pill">YPFL {season} · ROUND {round} · {date.toUpperCase()}</span>
+      <span class="desktop-only">Yorke Peninsula Football League · SANFL Affiliate · Celebrating 30 Years of Auskick</span>
+    </div>
+    <div class="topstrip-right">
+      <a href="https://maps.google.com/?q=Wallaroo+Oval+Cornish+Terrace" class="desktop-only">📍 Cornish Tce, Wallaroo SA</a>
+      <a href="mailto:admin@wallaroofc.com.au">✉ admin@wallaroofc.com.au</a>
+    </div>
+  </div>
+</div>
+
+<style>
+  .topstrip { background: var(--blue-darkest); color: var(--white); font-family: var(--headline); font-size: 13px; letter-spacing: 0.1em; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .topstrip-inner { max-width: 1400px; margin: 0 auto; padding: 10px 32px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+  .topstrip-left { display: flex; gap: 20px; align-items: center; }
+  .pill { background: var(--red); padding: 4px 12px; letter-spacing: 0.08em; display: inline-flex; align-items: center; gap: 8px; }
+  .pill::before { content: ''; width: 7px; height: 7px; background: white; border-radius: 50%; animation: pulse 1.4s ease-in-out infinite; }
+  .topstrip-right { display: flex; gap: 20px; align-items: center; opacity: 0.85; }
+  .topstrip-right a:hover { color: var(--red); opacity: 1; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.85); } }
+
+  @media (max-width: 768px) {
+    .topstrip-right .desktop-only { display: none; }
+    .topstrip-left .desktop-only { display: none; }
+  }
+</style>

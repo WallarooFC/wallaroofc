@@ -1,0 +1,469 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+const { data: volunteers } = await db
+  .from('volunteers')
+  .select(`
+    *,
+    qualifications (*)
+  `)
+  .eq('active', true)
+  .order('last_name');
+
+const QUAL_LABELS: Record<string, string> = {
+  wwc:             'Working With Children',
+  first_aid:       'First Aid',
+  rsa:             'RSA (Responsible Service of Alcohol)',
+  level1_coaching: 'Level 1 Coaching',
+  level2_coaching: 'Level 2 Coaching',
+  umpire:          'Umpire Accreditation',
+  sports_trainer:  'Sports Trainer',
+  other:           'Other',
+};
+
+const today = new Date();
+const in60 = new Date(); in60.setDate(today.getDate() + 60);
+const in30 = new Date(); in30.setDate(today.getDate() + 30);
+
+function expiryStatus(expiry?: string | null) {
+  if (!expiry) return 'none';
+  const d = new Date(expiry);
+  if (d < today) return 'expired';
+  if (d < in30) return 'critical';
+  if (d < in60) return 'warning';
+  return 'ok';
+}
+
+// Summary stats
+const allQuals = (volunteers ?? []).flatMap((v: any) => v.qualifications ?? []);
+const expiredCount  = allQuals.filter((q: any) => expiryStatus(q.expiry_date) === 'expired').length;
+const warningCount  = allQuals.filter((q: any) => ['critical','warning'].includes(expiryStatus(q.expiry_date))).length;
+const noWWC = (volunteers ?? []).filter((v: any) =>
+  !(v.qualifications ?? []).some((q: any) => q.type === 'wwc')
+).length;
+---
+<AdminLayout title="Qualifications & WWC">
+  <!-- Alert banner if issues exist -->
+  {(expiredCount > 0 || noWWC > 0) && (
+    <div class="alert-banner">
+      <span class="alert-icon">⚠</span>
+      <span>
+        {expiredCount > 0 && <strong>{expiredCount} expired qualification{expiredCount !== 1 ? 's' : ''}</strong>}
+        {expiredCount > 0 && noWWC > 0 && ' · '}
+        {noWWC > 0 && <strong>{noWWC} volunteer{noWWC !== 1 ? 's' : ''} missing WWC check</strong>}
+        {' '} — action required
+      </span>
+    </div>
+  )}
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card stat-ok">
+      <div class="stat-num">{(volunteers ?? []).length}</div>
+      <div class="stat-label">Active Volunteers</div>
+    </div>
+    <div class="stat-card {expiredCount > 0 ? 'stat-danger' : 'stat-ok'}">
+      <div class="stat-num">{expiredCount}</div>
+      <div class="stat-label">Expired</div>
+    </div>
+    <div class="stat-card {warningCount > 0 ? 'stat-warn' : 'stat-ok'}">
+      <div class="stat-num">{warningCount}</div>
+      <div class="stat-label">Expiring Soon</div>
+    </div>
+    <div class="stat-card {noWWC > 0 ? 'stat-danger' : 'stat-ok'}">
+      <div class="stat-num">{noWWC}</div>
+      <div class="stat-label">Missing WWC</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn-primary" id="add-volunteer-btn">+ Add Volunteer</button>
+    <button class="btn-secondary" id="add-qual-btn">+ Add Qualification</button>
+    <button class="btn-export" id="export-btn">↓ Export CSV</button>
+  </div>
+
+  <!-- Volunteer cards -->
+  {(volunteers ?? []).length === 0 && (
+    <div class="empty-state">
+      <div class="empty-icon">👥</div>
+      <p>No volunteers yet. Add your first volunteer to get started.</p>
+      <button class="btn-primary" id="add-vol-empty">+ Add Volunteer</button>
+    </div>
+  )}
+
+  {(volunteers ?? []).map((v: any) => {
+    const quals: any[] = v.qualifications ?? [];
+    const hasWWC = quals.some(q => q.type === 'wwc');
+    const hasExpired = quals.some(q => expiryStatus(q.expiry_date) === 'expired');
+    const hasCritical = quals.some(q => expiryStatus(q.expiry_date) === 'critical');
+
+    return (
+      <div class={`vol-card ${hasExpired ? 'vol-expired' : hasCritical ? 'vol-critical' : ''}`}>
+        <div class="vol-header">
+          <div class="vol-info">
+            <div class="vol-name">
+              {v.first_name} {v.last_name}
+              {!hasWWC && <span class="badge badge-danger">NO WWC</span>}
+              {hasExpired && <span class="badge badge-danger">EXPIRED CERT</span>}
+              {hasCritical && !hasExpired && <span class="badge badge-warn">EXPIRING SOON</span>}
+            </div>
+            <div class="vol-meta">
+              {v.email && <span>{v.email}</span>}
+              {v.phone && <span>{v.phone}</span>}
+              {(v.roles ?? []).length > 0 && (
+                <span class="roles">
+                  {(v.roles as string[]).map(r => <span class="role-tag">{r}</span>)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div class="vol-actions">
+            <button class="btn-sm" data-volunteer-id={v.id} data-action="add-qual">+ Qualification</button>
+            <button class="btn-sm btn-ghost" data-volunteer-id={v.id} data-action="edit-vol">Edit</button>
+          </div>
+        </div>
+
+        {quals.length === 0 ? (
+          <div class="no-quals">No qualifications recorded</div>
+        ) : (
+          <div class="quals-grid">
+            {quals.map((q: any) => {
+              const status = expiryStatus(q.expiry_date);
+              return (
+                <div class={`qual-item qual-${status}`}>
+                  <div class="qual-type">{QUAL_LABELS[q.type] ?? q.label ?? q.type}</div>
+                  <div class="qual-details">
+                    {q.reference_number && <span class="qual-ref">#{q.reference_number}</span>}
+                    {q.expiry_date && (
+                      <span class={`qual-expiry expiry-${status}`}>
+                        {status === 'expired' ? '✗ Expired' : status === 'critical' ? '⚠ Expires' : status === 'warning' ? '⏰ Expires' : '✓ Valid to'} {new Date(q.expiry_date).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })}
+                      </span>
+                    )}
+                    {!q.expiry_date && <span class="qual-expiry expiry-none">No expiry</span>}
+                    {q.verified && <span class="qual-verified">✓ Verified</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  })}
+
+  <!-- Add Volunteer Modal -->
+  <dialog id="vol-modal" class="modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2 id="vol-modal-title">Add Volunteer</h2>
+        <button class="modal-close" data-close="vol-modal">✕</button>
+      </div>
+      <form id="vol-form" class="modal-form">
+        <input type="hidden" id="vol-id" name="id" />
+        <div class="form-row">
+          <label class="form-group">
+            First Name <span class="req">*</span>
+            <input type="text" name="first_name" required />
+          </label>
+          <label class="form-group">
+            Last Name <span class="req">*</span>
+            <input type="text" name="last_name" required />
+          </label>
+        </div>
+        <label class="form-group">
+          Email
+          <input type="email" name="email" />
+        </label>
+        <label class="form-group">
+          Phone
+          <input type="tel" name="phone" />
+        </label>
+        <label class="form-group">
+          Roles (select all that apply)
+          <div class="checkbox-group">
+            {['bar','gate','canteen','trainer','committee','umpire','other'].map(r => (
+              <label class="checkbox-item">
+                <input type="checkbox" name="roles" value={r} /> {r}
+              </label>
+            ))}
+          </div>
+        </label>
+        <label class="form-group">
+          Notes
+          <textarea name="notes" rows="2"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" data-close="vol-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="vol-submit">Save Volunteer</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Add Qualification Modal -->
+  <dialog id="qual-modal" class="modal">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <h2>Add Qualification</h2>
+        <button class="modal-close" data-close="qual-modal">✕</button>
+      </div>
+      <form id="qual-form" class="modal-form">
+        <input type="hidden" id="qual-volunteer-id" name="volunteer_id" />
+        <label class="form-group">
+          Volunteer <span class="req">*</span>
+          <select name="volunteer_id_select" id="qual-vol-select" required>
+            <option value="">Select volunteer…</option>
+            {(volunteers ?? []).map((v: any) => (
+              <option value={v.id}>{v.first_name} {v.last_name}</option>
+            ))}
+          </select>
+        </label>
+        <label class="form-group">
+          Qualification Type <span class="req">*</span>
+          <select name="type" id="qual-type-select" required>
+            <option value="">Select type…</option>
+            {Object.entries(QUAL_LABELS).map(([k, label]) => (
+              <option value={k}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <div id="other-label-group" class="form-group" style="display:none">
+          Custom Label
+          <input type="text" name="label" placeholder="Describe the qualification" />
+        </div>
+        <label class="form-group">
+          Reference / Certificate Number
+          <input type="text" name="reference_number" placeholder="e.g. WWC card number" />
+        </label>
+        <div class="form-row">
+          <label class="form-group">
+            Issue Date
+            <input type="date" name="issued_date" />
+          </label>
+          <label class="form-group">
+            Expiry Date
+            <input type="date" name="expiry_date" />
+          </label>
+        </div>
+        <label class="form-group checkbox-single">
+          <input type="checkbox" name="verified" /> Mark as verified
+        </label>
+        <label class="form-group">
+          Notes
+          <textarea name="notes" rows="2"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" data-close="qual-modal">Cancel</button>
+          <button type="submit" class="btn-primary">Save Qualification</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+</AdminLayout>
+
+<style>
+  .alert-banner { background:rgba(200,16,46,0.15); border:1px solid rgba(200,16,46,0.4); border-radius:8px; padding:12px 16px; margin-bottom:20px; display:flex; align-items:center; gap:10px; font-size:14px; color:#f87171; }
+  .alert-icon { font-size:18px; }
+
+  .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .stat-card { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:8px; padding:16px 20px; }
+  .stat-card.stat-danger { border-color:rgba(200,16,46,0.5); }
+  .stat-card.stat-warn { border-color:rgba(234,179,8,0.4); }
+  .stat-num { font-size:32px; font-weight:700; line-height:1; margin-bottom:4px; }
+  .stat-danger .stat-num { color:#f87171; }
+  .stat-warn .stat-num { color:#facc15; }
+  .stat-ok .stat-num { color:#4ade80; }
+  .stat-label { font-size:12px; color:var(--admin-muted); text-transform:uppercase; letter-spacing:0.08em; }
+
+  .toolbar { display:flex; gap:10px; margin-bottom:24px; }
+  .btn-primary { background:#C8102E; color:#fff; border:none; border-radius:6px; padding:9px 18px; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn-primary:hover { background:#a50d24; }
+  .btn-secondary { background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:6px; padding:9px 18px; font-size:14px; cursor:pointer; }
+  .btn-secondary:hover { border-color:#C8102E; color:#C8102E; }
+  .btn-export { background:transparent; border:1px solid var(--admin-border); color:var(--admin-muted); border-radius:6px; padding:9px 18px; font-size:14px; cursor:pointer; margin-left:auto; }
+  .btn-export:hover { border-color:var(--admin-text); color:var(--admin-text); }
+
+  .empty-state { text-align:center; padding:64px 32px; color:var(--admin-muted); }
+  .empty-icon { font-size:48px; margin-bottom:12px; }
+  .empty-state p { margin-bottom:20px; }
+
+  .vol-card { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:10px; padding:20px; margin-bottom:16px; }
+  .vol-card.vol-expired { border-color:rgba(200,16,46,0.5); }
+  .vol-card.vol-critical { border-color:rgba(234,179,8,0.4); }
+
+  .vol-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+  .vol-name { font-size:16px; font-weight:600; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .vol-meta { font-size:13px; color:var(--admin-muted); display:flex; flex-wrap:wrap; gap:12px; }
+  .roles { display:flex; gap:6px; flex-wrap:wrap; }
+  .role-tag { background:rgba(20,49,92,0.6); color:#8ab4f8; border-radius:4px; padding:2px 7px; font-size:11px; text-transform:capitalize; }
+
+  .badge { font-size:10px; font-weight:700; border-radius:3px; padding:2px 6px; text-transform:uppercase; letter-spacing:0.06em; }
+  .badge-danger { background:rgba(200,16,46,0.25); color:#f87171; }
+  .badge-warn { background:rgba(234,179,8,0.2); color:#facc15; }
+
+  .vol-actions { display:flex; gap:8px; flex-shrink:0; }
+  .btn-sm { background:var(--admin-card); border:1px solid var(--admin-border); color:var(--admin-text); border-radius:5px; padding:6px 12px; font-size:12px; cursor:pointer; }
+  .btn-sm:hover { border-color:#C8102E; color:#C8102E; }
+  .btn-ghost { background:transparent; border:1px solid var(--admin-border); color:var(--admin-muted); border-radius:5px; padding:6px 12px; font-size:12px; cursor:pointer; }
+  .btn-ghost:hover { color:var(--admin-text); border-color:var(--admin-text); }
+
+  .no-quals { font-size:13px; color:var(--admin-muted); font-style:italic; }
+
+  .quals-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px; }
+  .qual-item { border:1px solid var(--admin-border); border-radius:6px; padding:10px 12px; }
+  .qual-item.qual-expired { border-color:rgba(200,16,46,0.5); background:rgba(200,16,46,0.05); }
+  .qual-item.qual-critical { border-color:rgba(234,179,8,0.5); background:rgba(234,179,8,0.05); }
+  .qual-item.qual-warning { border-color:rgba(234,179,8,0.3); }
+  .qual-item.qual-ok { border-color:rgba(74,222,128,0.3); }
+  .qual-type { font-size:13px; font-weight:600; margin-bottom:4px; }
+  .qual-details { font-size:12px; color:var(--admin-muted); display:flex; flex-direction:column; gap:3px; }
+  .qual-ref { font-family:monospace; font-size:11px; }
+  .expiry-expired { color:#f87171; font-weight:600; }
+  .expiry-critical { color:#fb923c; font-weight:600; }
+  .expiry-warning { color:#facc15; }
+  .expiry-ok { color:#4ade80; }
+  .expiry-none { color:var(--admin-muted); }
+  .qual-verified { color:#4ade80; font-size:11px; }
+
+  /* Modal */
+  .modal { background:transparent; border:none; padding:0; }
+  .modal::backdrop { background:rgba(0,0,0,0.6); }
+  .modal-inner { background:var(--admin-card); border:1px solid var(--admin-border); border-radius:12px; padding:28px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .modal-header h2 { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:0.05em; }
+  .modal-close { background:transparent; border:none; color:var(--admin-muted); font-size:18px; cursor:pointer; padding:4px; }
+  .modal-close:hover { color:var(--admin-text); }
+
+  .modal-form { display:flex; flex-direction:column; gap:14px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; font-size:13px; color:var(--admin-muted); }
+  .form-group input, .form-group select, .form-group textarea {
+    background:#081426; border:1px solid var(--admin-border); color:var(--admin-text);
+    border-radius:6px; padding:8px 12px; font-size:14px; font-family:inherit;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:#C8102E;
+  }
+  .req { color:#C8102E; }
+  .checkbox-group { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+  .checkbox-item { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--admin-text); text-transform:capitalize; cursor:pointer; }
+  .checkbox-single { flex-direction:row !important; align-items:center; gap:8px; font-size:14px; color:var(--admin-text); cursor:pointer; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:8px; }
+</style>
+
+<script>
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  const supabase = createClient(
+    import.meta.env.PUBLIC_SUPABASE_URL,
+    import.meta.env.PUBLIC_SUPABASE_ANON_KEY
+  );
+
+  // Modal helpers
+  function openModal(id: string) {
+    (document.getElementById(id) as HTMLDialogElement)?.showModal();
+  }
+  function closeModal(id: string) {
+    (document.getElementById(id) as HTMLDialogElement)?.close();
+  }
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal((btn as HTMLElement).dataset.close!));
+  });
+
+  // Open add volunteer
+  document.getElementById('add-volunteer-btn')?.addEventListener('click', () => openModal('vol-modal'));
+  document.getElementById('add-vol-empty')?.addEventListener('click', () => openModal('vol-modal'));
+
+  // Open add qual
+  document.getElementById('add-qual-btn')?.addEventListener('click', () => {
+    (document.getElementById('qual-volunteer-id') as HTMLInputElement).value = '';
+    openModal('qual-modal');
+  });
+
+  // Per-volunteer add qual buttons
+  document.querySelectorAll('[data-action="add-qual"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const volId = (btn as HTMLElement).dataset.volunteerId!;
+      (document.getElementById('qual-vol-select') as HTMLSelectElement).value = volId;
+      openModal('qual-modal');
+    });
+  });
+
+  // Show/hide "other" label field
+  document.getElementById('qual-type-select')?.addEventListener('change', (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    const g = document.getElementById('other-label-group')!;
+    g.style.display = v === 'other' ? 'flex' : 'none';
+  });
+
+  // Save volunteer
+  document.getElementById('vol-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('vol-submit')!;
+    btn.textContent = 'Saving…';
+    const fd = new FormData(e.target as HTMLFormElement);
+    const roles = fd.getAll('roles');
+    const payload: any = {
+      first_name: fd.get('first_name'),
+      last_name: fd.get('last_name'),
+      email: fd.get('email') || null,
+      phone: fd.get('phone') || null,
+      roles,
+      notes: fd.get('notes') || null,
+      active: true,
+    };
+    const id = fd.get('id') as string;
+    let err;
+    if (id) {
+      ({ error: err } = await supabase.from('volunteers').update(payload).eq('id', id));
+    } else {
+      ({ error: err } = await supabase.from('volunteers').insert(payload));
+    }
+    if (err) { alert('Error: ' + err.message); btn.textContent = 'Save Volunteer'; return; }
+    window.location.reload();
+  });
+
+  // Save qualification
+  document.getElementById('qual-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    const volunteerId = (document.getElementById('qual-vol-select') as HTMLSelectElement).value;
+    const payload: any = {
+      volunteer_id: volunteerId,
+      type: fd.get('type'),
+      label: fd.get('label') || null,
+      reference_number: fd.get('reference_number') || null,
+      issued_date: fd.get('issued_date') || null,
+      expiry_date: fd.get('expiry_date') || null,
+      verified: fd.has('verified'),
+      notes: fd.get('notes') || null,
+    };
+    const { error } = await supabase.from('qualifications').insert(payload);
+    if (error) { alert('Error: ' + error.message); return; }
+    window.location.reload();
+  });
+
+  // Export CSV
+  document.getElementById('export-btn')?.addEventListener('click', () => {
+    const rows = [['Volunteer','Email','Phone','Roles','Qualification','Type','Reference','Issued','Expiry','Verified']];
+    document.querySelectorAll('.vol-card').forEach(card => {
+      const name = card.querySelector('.vol-name')?.textContent?.trim() ?? '';
+      const email = (card.querySelector('.vol-meta span:first-child') as HTMLElement)?.textContent ?? '';
+      card.querySelectorAll('.qual-item').forEach(qi => {
+        const type = qi.querySelector('.qual-type')?.textContent ?? '';
+        rows.push([name, email, '', '', type, '', '', '', '', '']);
+      });
+    });
+    const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'wallaroo-qualifications.csv';
+    a.click();
+  });
+</script>

@@ -1,0 +1,128 @@
+---
+export const prerender = false;
+import { getCollection } from 'astro:content';
+import { supabase } from '../../lib/supabase';
+import { nameToSlug } from '../../lib/clubs';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import FullFixture from '../../components/FullFixture.astro';
+
+// Supabase fixtures (Wallaroo-only) + A-Grade Wallaroo results
+const [{ data: dbFixtures }, { data: dbResults }] = await Promise.all([
+  supabase.from('fixtures').select('*').eq('season', 2026).order('round').order('grade'),
+  supabase.from('results').select('round,home_team,home_score,away_team,away_score').eq('season', 2026).eq('grade', 'A-Grade').or('home_team.ilike.%wallaroo%,away_team.ilike.%wallaroo%'),
+]);
+
+// Build round → score map (Wallaroo games only)
+const scoreByRound = new Map<number, { wallarooScore: number; oppScore: number; wallarooWon: boolean }>();
+for (const r of dbResults ?? []) {
+  const wallarooIsHome = r.home_team?.toLowerCase().includes('wallaroo');
+  const wallarooIsAway = r.away_team?.toLowerCase().includes('wallaroo');
+  if (!wallarooIsHome && !wallarooIsAway) continue;
+  const wScore = wallarooIsHome ? r.home_score : r.away_score;
+  const oScore = wallarooIsHome ? r.away_score : r.home_score;
+  if (wScore !== null && oScore !== null) {
+    scoreByRound.set(r.round, { wallarooScore: wScore, oppScore: oScore, wallarooWon: wScore > oScore });
+  }
+}
+
+let fixtures: any[] = [];
+if ((dbFixtures ?? []).length > 0) {
+  // De-duplicate by round (take highest-grade per round for the fixture card — A-Grade)
+  const seen = new Set<number>();
+  fixtures = (dbFixtures ?? [])
+    .filter(f => f.opponent)
+    .map(f => {
+      const matchDate = f.match_date
+        ? new Date(f.match_date + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+        : '';
+      const score = f.grade === 'A-Grade' && f.status === 'completed' ? scoreByRound.get(f.round) : undefined;
+      return {
+        round:          f.round,
+        date:           matchDate,
+        type:           f.status === 'bye' ? 'bye' : 'match',
+        oppSlug:        nameToSlug(f.opponent),
+        oppName:        f.opponent,
+        venue:          f.is_home ? 'HOME' : 'AWAY',
+        venueDetail:    f.is_home ? 'Wallaroo Oval' : (f.venue ?? ''),
+        status:         f.status === 'completed' ? 'past' : 'upcoming',
+        grade:          f.grade,
+        wallarooScore:  score?.wallarooScore,
+        oppScore:       score?.oppScore,
+        wallarooWon:    score?.wallarooWon,
+      };
+    })
+    .filter(f => {
+      // Show one card per round (A-Grade) — skip duplicates
+      if (f.grade !== 'A-Grade') return false;
+      if (seen.has(f.round)) return false;
+      seen.add(f.round);
+      return true;
+    });
+} else {
+  fixtures = (await getCollection('fixtures')).map(e => e.data).sort((a, b) => a.round - b.round);
+}
+
+const MONTH_ORDER: Record<string, number> = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 };
+function finalDateSort(d: string) {
+  const parts = d.replace(/^(Sat|Sun|Mon|Tue|Wed|Thu|Fri)\s+/, '').split(' ');
+  return (MONTH_ORDER[parts[1]] ?? 0) * 100 + parseInt(parts[0]);
+}
+const finals = (await getCollection('finals')).map(e => e.data).sort((a: any, b: any) => finalDateSort(a.date) - finalDateSort(b.date));
+
+const homeMatches = fixtures.filter(f => f.venue === 'HOME').length;
+const awayMatches = fixtures.filter(f => f.venue === 'AWAY').length;
+const byes        = fixtures.filter(f => f.type === 'bye').length;
+---
+<PageLayout
+  title="2026 Fixtures · Wallaroo FC"
+  description="Complete YPFL 2026 fixture for the Wallaroo Bulldogs across all rounds plus the finals series."
+>
+  <PageHero
+    eyebrow="2026 Premiership Season"
+    title="Every round."
+    titleItalic="Every Saturday."
+    intro={`The full ${fixtures.length}-round YPFL fixture plus the September finals. ${homeMatches} home games. ${awayMatches} away. ${byes} byes.`}
+  />
+
+  <FullFixture
+    fixtures={fixtures}
+    finals={finals}
+    finalsLabel="2026 Finals Series"
+    finalsSub="August — September"
+  />
+
+  <section class="grade-times">
+    <div class="container">
+      <h2 class="title">Grade <span class="ital">bounce times</span></h2>
+      <p class="lede">Every Saturday in season. Times are confirmed Monday of each week; check the homepage for the current round.</p>
+      <table class="grade-table">
+        <thead>
+          <tr><th>Grade</th><th>Bounce</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>U9</td><td>9:00 AM</td></tr>
+          <tr><td>U11</td><td>9:00 AM</td></tr>
+          <tr><td>Junior Colts</td><td>10:00 AM</td></tr>
+          <tr><td>Senior Colts</td><td>11:20 AM</td></tr>
+          <tr><td>B Grade</td><td>12:55 PM</td></tr>
+          <tr><td>A-Grade</td><td>2:40 PM</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .grade-times { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); }
+  .container { max-width: 960px; margin: 0 auto; }
+  .title { font-family: var(--display); font-size: clamp(40px, 5vw, 64px); color: var(--blue-deep); text-transform: uppercase; line-height: 0.95; margin-bottom: 16px; }
+  .title .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+  .lede { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--grey); margin-bottom: 32px; max-width: 640px; }
+  .grade-table { width: 100%; border-collapse: collapse; }
+  .grade-table th { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); text-align: left; padding: 14px 16px; border-bottom: 2px solid var(--line); }
+  .grade-table td { font-family: var(--display); font-size: 18px; color: var(--blue-deep); padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .grade-table tr:last-child td { border-bottom: none; }
+  .grade-table tr:nth-child(odd) td { background: var(--cream); }
+  @media (max-width: 700px) { .grade-times { padding: 64px 24px; } .grade-table th, .grade-table td { font-size: 14px; padding: 10px 12px; } }
+</style>

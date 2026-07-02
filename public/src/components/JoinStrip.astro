@@ -1,0 +1,66 @@
+---
+const cards = [
+  {
+    n: '01',
+    title: 'Play',
+    body: 'Seniors. Juniors. Auskick. The doors are open. 2026 player registration is live via PlayHQ — new players welcome at every grade.',
+    link: 'Register now',
+    href: '/membership/',
+  },
+  {
+    n: '02',
+    title: 'Sponsor',
+    body: 'Five tiers. 70+ active partners. Be seen on jumpers, boundary signage, programmes and digital channels every week of the season.',
+    link: 'Sponsor prospectus',
+    href: '/sponsors/',
+  },
+  {
+    n: '03',
+    title: 'Belong',
+    bodyHtml: 'Five tiers from $50 Social to $500 Platinum. Join as a Social, Bronze, Silver, Gold or Platinum member — every tier helps keep the Bulldogs running.',
+    link: 'Become a member',
+    href: '/membership/',
+  },
+];
+---
+<div class="join-strip">
+  <div class="join-grid">
+    {cards.map(c => (
+      <a href={c.href} class="join-card">
+        <div class="join-num">{c.n}</div>
+        <h3>{c.title}</h3>
+        {c.bodyHtml ? <p set:html={c.bodyHtml} /> : <p>{c.body}</p>}
+        <span class="join-link">{c.link}</span>
+      </a>
+    ))}
+  </div>
+</div>
+
+<style>
+  .join-strip { background: var(--white); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .join-grid { display: grid; grid-template-columns: repeat(3, 1fr); max-width: 1400px; margin: 0 auto; }
+  .join-card { padding: 80px 48px; border-right: 1px solid var(--line); position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); cursor: pointer; display: block; }
+  .join-card:last-child { border-right: none; }
+  .join-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: var(--red); transform: scaleX(0); transform-origin: left; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  .join-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--blue-deep) 0%, var(--blue-darkest) 100%); opacity: 0; transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  .join-card > * { position: relative; z-index: 1; transition: color 0.4s; }
+  .join-card:hover::before { transform: scaleX(1); }
+  .join-card:hover::after { opacity: 1; }
+  .join-card:hover .join-num { color: var(--red); }
+  .join-card:hover h3 { color: var(--white); }
+  .join-card:hover p { color: rgba(255,255,255,0.8); }
+  .join-card:hover .join-link { color: var(--white); border-color: var(--white); }
+  .join-num { font-family: var(--display); font-size: 120px; line-height: 0.85; color: var(--cream); margin-bottom: 24px; }
+  .join-card h3 { font-family: var(--display); font-size: 56px; color: var(--blue-deep); margin-bottom: 16px; text-transform: uppercase; line-height: 1; }
+  .join-card p { font-family: var(--serif); font-size: 17px; color: var(--grey); margin-bottom: 32px; line-height: 1.6; max-width: 320px; }
+  .join-link { font-family: var(--headline); font-size: 15px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--red); display: inline-flex; align-items: center; gap: 12px; border-bottom: 2px solid var(--red); padding-bottom: 6px; }
+  .join-link::after { content: '→'; transition: transform 0.3s; }
+  .join-card:hover .join-link::after { transform: translateX(8px); }
+
+  @media (max-width: 768px) {
+    .join-grid { grid-template-columns: 1fr; }
+    .join-card { border-right: none; border-bottom: 1px solid var(--line); padding: 56px 32px; }
+    .join-num { font-size: 80px; }
+    .join-card h3 { font-size: 40px; }
+  }
+</style>

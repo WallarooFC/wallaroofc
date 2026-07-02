@@ -1,0 +1,107 @@
+---
+/**
+ * Scrolling sponsor ribbon.
+ * Items with a logo path show an image; others show text name.
+ * Track is duplicated for a seamless infinite loop.
+ */
+interface SponsorItem {
+  name: string;
+  logo?: string; // path relative to /public e.g. /sponsors/tports.png
+}
+
+interface Props {
+  items: SponsorItem[];
+}
+
+const { items } = Astro.props;
+const track = [...items, ...items]; // duplicate for seamless loop
+---
+<div class="ribbon" aria-label="Our 2026 sponsors">
+  <div class="ribbon-track">
+    {track.map(item => (
+      <div class="ribbon-item">
+        <span class="dot" aria-hidden="true">◆</span>
+        {item.logo
+          ? <div class="logo-pill"><img src={item.logo} alt={item.name} loading="eager" decoding="async" /></div>
+          : <span class="ribbon-name">{item.name}</span>
+        }
+      </div>
+    ))}
+  </div>
+</div>
+
+<style>
+  .ribbon {
+    background: var(--blue-deep);
+    border-top: 3px solid var(--red);
+    border-bottom: 3px solid var(--red);
+    overflow: hidden;
+    white-space: nowrap;
+    height: 144px;
+    display: flex;
+    align-items: center;
+  }
+  .ribbon-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    animation: scroll-left 240s linear infinite;
+    will-change: transform;
+  }
+  .ribbon:hover .ribbon-track {
+    animation-play-state: paused;
+  }
+  .ribbon-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 0 48px;
+    height: 144px;
+    flex-shrink: 0;
+  }
+  .logo-pill {
+    background: #fff;
+    border-radius: 6px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 112px;
+    box-sizing: border-box;
+    transition: opacity 0.2s;
+    opacity: 0.9;
+  }
+  .ribbon-item:hover .logo-pill {
+    opacity: 1;
+  }
+  .logo-pill img {
+    height: 96px;
+    width: auto;
+    max-width: 240px;
+    object-fit: contain;
+    display: block;
+  }
+  .ribbon-name {
+    font-family: var(--headline);
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.65);
+    white-space: nowrap;
+    transition: color 0.2s;
+  }
+  .ribbon-item:hover .ribbon-name {
+    color: var(--white);
+  }
+  .dot {
+    font-size: 7px;
+    color: var(--red);
+    flex-shrink: 0;
+  }
+
+  @keyframes scroll-left {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+</style>

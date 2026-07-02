@@ -1,0 +1,99 @@
+---
+export const prerender = false;
+import { getCollection } from 'astro:content';
+import { supabase } from '../../lib/supabase';
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import Crest from '../../components/Crest.astro';
+
+const { data: dbLadders } = await supabase
+  .from('ladders')
+  .select('*')
+  .eq('season', 2026)
+  .order('display_order');
+
+let ladders: any[] = [];
+if ((dbLadders ?? []).length > 0) {
+  ladders = (dbLadders ?? []).map(l => ({
+    grade:      l.grade,
+    tabLabel:   l.tab_label ?? l.grade,
+    afterRound: l.synced_at
+      ? parseInt(String((dbLadders ?? [])[0]?.display_order ?? 0)) || 0
+      : 0,
+    columns: l.columns,
+    rows:    l.rows,
+  }));
+} else {
+  ladders = (await getCollection('ladders')).map(e => e.data).sort((a: any, b: any) => a.order - b.order);
+}
+
+// Get afterRound from site_config
+const { data: roundRow } = await supabase.from('site_config').select('value').eq('key', 'current_round').single();
+const afterRound = parseInt(roundRow?.value ?? '0') || Math.max(0, ...ladders.map((l: any) => l.afterRound ?? 0));
+---
+<PageLayout
+  title="Ladders · Wallaroo FC"
+  description={`YPFL 2026 ladders after round ${afterRound} — A-Grade, B Grade, Senior Colts and Junior Colts.`}
+>
+  <PageHero
+    eyebrow={`After Round ${afterRound}`}
+    title="YPFL"
+    titleItalic="2026 ladders."
+    intro="Live ladders across all four senior grades. Updated every Monday after the round."
+  />
+
+  <section class="ladders-page">
+    <div class="container">
+      {ladders.map(l => (
+        <div class="ladder-block">
+          <header>
+            <h2>{l.grade}</h2>
+            <span class="badge">After R{l.afterRound}</span>
+          </header>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">L</th><th class="num">{l.columns === 'pts' ? 'PTS' : '%'}</th></tr>
+            </thead>
+            <tbody>
+              {l.rows.map(r => (
+                <tr class={r.highlight ? 'highlight' : ''}>
+                  <td class="pos">{r.pos}</td>
+                  <td class="team">
+                    <span class="crest"><Crest club={r.slug} size={32} /></span>
+                    <span class="team-name">{r.team}</span>
+                  </td>
+                  <td class="num">{r.p}</td>
+                  <td class="num">{r.w}</td>
+                  <td class="num">{r.l}</td>
+                  <td class="num">{l.columns === 'pts' ? (r.pts ?? '—') : r.pct}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .ladders-page { background: var(--cream); padding: 80px 32px 120px; }
+  .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 32px; }
+  .ladder-block { background: var(--white); border-radius: 6px; border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,0.03); overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 20px 28px; background: var(--blue-deep); color: var(--white); border-bottom: 4px solid var(--red); }
+  header h2 { font-family: var(--display); font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge { background: var(--red); padding: 5px 12px; font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); padding: 12px 16px; background: var(--cream); text-align: left; }
+  th.num { text-align: right; }
+  td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--line); }
+  td.num { text-align: right; font-family: var(--display); font-size: 16px; color: var(--blue-deep); letter-spacing: 0.02em; }
+  td.pos { font-family: var(--display); font-size: 16px; color: var(--grey); width: 40px; }
+  td.team { display: flex; align-items: center; gap: 12px; font-family: var(--display); font-size: 16px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; }
+  .crest { width: 32px; height: 32px; flex-shrink: 0; }
+  tr.highlight { background: linear-gradient(90deg, rgba(200,16,46,0.08), rgba(200,16,46,0.02)); }
+  tr.highlight td.pos { color: var(--red); font-weight: 700; }
+  tr.highlight td.team .team-name { color: var(--red); }
+  tr:last-child td { border-bottom: none; }
+  @media (max-width: 900px) { .container { grid-template-columns: 1fr; } .ladders-page { padding: 48px 24px; } }
+</style>

@@ -1,49 +1,33 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
-# testing
-/coverage
-/playwright-report
-/test-results
-/blob-report
-/playwright/.cache
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
 # env files (do not commit)
 .env
 .env*.local
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# OS
+.DS_Store
 
-# vercel
-.vercel
-
-# editor
+# Editor
 .vscode/
 .idea/
+
+# Monorepo node_modules (each app has its own)
+node_modules/
+
+# portal/ (Next.js)
+portal/node_modules/
+portal/.next/
+portal/out/
+portal/build/
+portal/coverage/
+portal/playwright-report/
+portal/test-results/
+portal/.pnp
+portal/.pnp.*
+
+# public/ (Astro)
+public/node_modules/
+public/dist/
+public/.astro/
+public/.vercel/
+
+# Vercel
+.vercel

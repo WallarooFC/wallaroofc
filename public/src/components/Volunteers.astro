@@ -1,0 +1,37 @@
+---
+---
+<section class="volunteers" aria-labelledby="vol-heading">
+  <div class="vol-inner">
+    <div class="vol-text reveal">
+      <div class="section-eyebrow">The Heart of the Club</div>
+      <h2 id="vol-heading">Country footy runs on<span class="ital">volunteer hands.</span></h2>
+      <p>Get involved in the Wallaroo Football Club as a volunteer. Contact us now to discuss how you can add value to our amazing club.</p>
+      <a href="/volunteers/" class="vol-cta"><span>I'd like to help</span><span aria-hidden="true">→</span></a>
+    </div>
+    <div class="vol-photo reveal reveal-delay-1">
+      <img src="/volunteers-juniors.jpg" alt="Junior Bulldogs players on game day at Wallaroo Oval" />
+    </div>
+  </div>
+</section>
+
+<style>
+  .volunteers { background: var(--white); padding: 100px 32px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .vol-inner { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .vol-text h2 { font-family: var(--display); font-size: clamp(48px, 5.5vw, 80px); line-height: 0.92; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 24px; }
+  .vol-text h2 .ital { font-family: var(--serif); font-style: italic; color: var(--red); text-transform: none; letter-spacing: -0.02em; display: block; }
+  .vol-text p { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--charcoal); margin-bottom: 28px; }
+  .vol-text p:first-of-type::first-letter { font-family: var(--display); font-size: 64px; float: left; line-height: 0.85; margin-right: 10px; margin-top: 4px; color: var(--red); }
+  .vol-cta { display: inline-flex; align-items: center; gap: 12px; background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 16px 28px; border: 2px solid var(--red); transition: all 0.3s; text-decoration: none; }
+  .vol-cta:hover { background: var(--red-deep); transform: translateY(-2px); box-shadow: 0 12px 24px rgba(200,16,46,0.3); }
+  .vol-photo { position: relative; border-radius: 4px; overflow: hidden; border-left: 4px solid var(--red); }
+  .vol-photo img { width: 100%; height: 100%; min-height: 420px; object-fit: cover; object-position: center 40%; display: block; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+
+  @media (max-width: 1100px) { .vol-inner { grid-template-columns: 1fr; gap: 48px; } .vol-photo img { min-height: 320px; } }
+  @media (max-width: 700px) { .volunteers { padding: 80px 24px; } .vol-photo img { min-height: 260px; } }
+</style>

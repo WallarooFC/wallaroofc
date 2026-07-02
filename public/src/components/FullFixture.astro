@@ -1,0 +1,162 @@
+---
+import Crest from './Crest.astro';
+import type { ClubSlug } from '../lib/clubs.ts';
+
+interface FixtureCard {
+  round: number;
+  date: string;
+  type: 'match' | 'bye';
+  oppSlug?: ClubSlug;
+  oppName?: string;
+  venue?: 'HOME' | 'AWAY';
+  venueDetail?: string; // e.g. "AWAY · Yorketown"
+  status?: 'past' | 'now' | 'upcoming';
+  wallarooScore?: number;
+  oppScore?: number;
+  wallarooWon?: boolean;
+}
+
+interface FinalMatch {
+  name: string;
+  date: string;
+  venue: string;
+  hostHere?: boolean;
+  grandFinal?: boolean;
+}
+
+interface Props {
+  fixtures: FixtureCard[];
+  finals: FinalMatch[];
+  finalsLabel?: string;
+  finalsSub?: string;
+}
+
+const { fixtures, finals, finalsLabel = 'Finals Series', finalsSub = 'August — September 2026' } = Astro.props;
+---
+<section class="fixture-section" aria-labelledby="fixture-heading">
+  <div class="container">
+    <div class="section-header reveal">
+      <div>
+        <div class="section-eyebrow">2026 Premiership Season</div>
+        <h2 class="section-title" id="fixture-heading">The full <span class="ital">fixture</span></h2>
+      </div>
+      <a href="/fixtures/" class="section-link">Print PDF →</a>
+    </div>
+
+    <div class="fx-grid reveal">
+      {fixtures.map(f => {
+        const classes = ['fx-card'];
+        if (f.status === 'past') classes.push('fx-past');
+        if (f.status === 'now') classes.push('fx-now');
+        if (f.type === 'bye') classes.push('fx-bye');
+        return (
+          <div class={classes.join(' ')}>
+            <div class="fx-rnd">{f.status === 'now' ? `R${f.round} · NOW` : `R${f.round}`}</div>
+            <div class="fx-date">{f.date}</div>
+            {f.type === 'bye' ? (
+              <div class="fx-bye-mark" aria-label="Bye round">BYE</div>
+            ) : (
+              <>
+                <div class="fx-opp-row">
+                  <span class="fx-vs">vs</span>
+                  {f.oppSlug && <span class="fx-opp-crest"><Crest club={f.oppSlug} size={26} /></span>}
+                  <span class="fx-opp-name">{f.oppName}</span>
+                </div>
+                {f.status === 'past' && f.wallarooScore !== undefined && (
+                  <div class={`fx-score ${f.wallarooWon ? 'fx-score-win' : (f.wallarooScore === f.oppScore ? 'fx-score-draw' : 'fx-score-loss')}`}>
+                    {f.wallarooWon ? 'W' : (f.wallarooScore === f.oppScore ? 'D' : 'L')} {f.wallarooScore}–{f.oppScore}
+                  </div>
+                )}
+                <div class={`fx-venue ${f.venue === 'HOME' ? 'fx-home' : 'fx-away'}`}>{f.venueDetail ?? f.venue}</div>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+
+    <div class="fx-finals reveal reveal-delay-1">
+      <div class="fx-finals-header">
+        <span class="fx-finals-label">{finalsLabel}</span>
+        <span class="fx-finals-sub">{finalsSub}</span>
+      </div>
+      <div class="fx-finals-grid">
+        {finals.map(fn => {
+          const cls = ['fx-final'];
+          if (fn.hostHere) cls.push('fx-final-host');
+          if (fn.grandFinal) cls.push('fx-final-gf');
+          return (
+            <div class={cls.join(' ')}>
+              <div class="fx-final-name">{fn.hostHere ? `${fn.name} ★` : fn.name}</div>
+              <div class="fx-final-date">{fn.date}</div>
+              <div class="fx-final-venue">{fn.venue}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .fixture-section { background: var(--white); padding: 120px 32px; position: relative; }
+  .container { max-width: 1400px; margin: 0 auto; }
+  .section-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 64px; gap: 32px; flex-wrap: wrap; }
+  .section-eyebrow { font-family: var(--headline); font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); margin-bottom: 16px; display: flex; align-items: center; gap: 14px; }
+  .section-eyebrow::before { content: ''; width: 36px; height: 3px; background: var(--red); }
+  .section-title { font-family: var(--display); font-size: clamp(48px, 6vw, 88px); line-height: 0.92; color: var(--blue-deep); text-transform: uppercase; }
+  .section-title .ital { font-family: var(--serif); font-style: italic; font-weight: 400; color: var(--red); text-transform: none; letter-spacing: -0.02em; }
+  .section-link { font-family: var(--headline); font-size: 16px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--blue-deep); border-bottom: 3px solid var(--red); padding-bottom: 4px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.3s; }
+  .section-link:hover { color: var(--red); transform: translateX(4px); }
+
+  .fx-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 56px; }
+  .fx-card { background: var(--cream); border: 1px solid var(--line); border-left: 4px solid var(--blue-deep); border-radius: 4px; padding: 16px 14px; display: flex; flex-direction: column; gap: 10px; position: relative; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+  .fx-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(20,49,92,0.1); }
+  .fx-card.fx-now { background: linear-gradient(135deg, var(--blue-darkest) 0%, var(--blue-deep) 100%); color: var(--white); border-left-color: var(--red); border: 1px solid var(--red); border-left-width: 4px; box-shadow: 0 12px 32px rgba(200,16,46,0.25); }
+  .fx-card.fx-past { background: rgba(20,49,92,0.03); }
+  .fx-card.fx-past .fx-opp-crest { opacity: 0.45; }
+  .fx-card.fx-past::after { content: 'PLAYED'; position: absolute; top: 8px; right: 8px; font-family: var(--headline); font-size: 9px; letter-spacing: 0.14em; color: var(--grey); }
+  .fx-rnd { font-family: var(--display); font-size: 14px; letter-spacing: 0.06em; color: var(--red); text-transform: uppercase; }
+  .fx-card.fx-now .fx-rnd { color: var(--white); }
+  .fx-date { font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; color: var(--grey); text-transform: uppercase; }
+  .fx-card.fx-now .fx-date { color: rgba(255,255,255,0.7); }
+  .fx-opp-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .fx-vs { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--grey); }
+  .fx-card.fx-now .fx-vs { color: rgba(255,255,255,0.6); }
+  .fx-opp-crest { width: 26px; height: 26px; flex-shrink: 0; }
+  .fx-opp-name { font-family: var(--display); font-size: 14px; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.1; }
+  .fx-score { font-family: var(--display); font-size: 13px; letter-spacing: 0.04em; }
+  .fx-score-win { color: var(--red); }
+  .fx-score-loss { color: var(--grey); }
+  .fx-score-draw { color: var(--blue-deep); }
+  .fx-venue { font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .fx-card.fx-now .fx-venue { border-top-color: rgba(255,255,255,0.15); }
+  .fx-home { color: var(--red); font-weight: 600; }
+  .fx-away { color: var(--grey); }
+  .fx-card.fx-now .fx-away { color: rgba(255,255,255,0.7); }
+  .fx-card.fx-bye { background: rgba(20,49,92,0.05); border-style: dashed; border-left-style: solid; border-left-color: var(--grey); align-items: center; justify-content: center; text-align: center; }
+  .fx-bye-mark { font-family: var(--display); font-size: 26px; color: var(--grey); margin-top: 4px; }
+
+  .fx-finals { background: var(--blue-darkest); color: var(--white); border-radius: 6px; padding: 40px 32px; position: relative; overflow: hidden; }
+  .fx-finals::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 80% 30%, rgba(200,16,46,0.2) 0%, transparent 60%); }
+  .fx-finals-header { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+  .fx-finals-label { font-family: var(--display); font-size: 28px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--red); }
+  .fx-finals-sub { font-family: var(--serif); font-style: italic; font-size: 14px; color: rgba(255,255,255,0.6); }
+  .fx-finals-grid { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .fx-final { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; padding: 18px 14px; text-align: center; transition: all 0.3s; }
+  .fx-final:hover { background: rgba(255,255,255,0.08); transform: translateY(-3px); }
+  .fx-final-name { font-family: var(--display); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; line-height: 1.2; }
+  .fx-final-date { font-family: var(--display); font-size: 18px; color: var(--white); margin-bottom: 6px; letter-spacing: 0.02em; }
+  .fx-final-venue { font-family: var(--headline); font-size: 11px; letter-spacing: 0.12em; color: rgba(255,255,255,0.6); text-transform: uppercase; }
+  .fx-final-host { background: rgba(200,16,46,0.18); border-color: var(--red); }
+  .fx-final-host .fx-final-name { color: var(--red); }
+  .fx-final-gf { background: rgba(255,199,44,0.12); border-color: #FFC72C; }
+  .fx-final-gf .fx-final-name { color: #FFC72C; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+
+  @media (max-width: 1100px) { .fx-grid, .fx-finals-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { .fx-grid, .fx-finals-grid { grid-template-columns: repeat(2, 1fr); } .fixture-section { padding: 80px 24px; } }
+</style>

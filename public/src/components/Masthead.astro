@@ -1,0 +1,136 @@
+---
+import Crest from './Crest.astro';
+
+const navItems = [
+  {
+    label: 'Football',
+    href: '/fixtures/',
+    dropdown: [
+      { label: 'Fixtures', href: '/fixtures/' },
+      { label: 'Ladders', href: '/ladders/' },
+      { label: 'Results', href: '/results/' },
+      { label: 'Gallery', href: '/gallery/' },
+      { divider: true },
+      { label: 'A-Grade', href: '/teams/a-grade/' },
+      { label: 'B Grade', href: '/teams/b-grade/' },
+      { label: 'Senior Colts', href: '/teams/senior-colts/' },
+      { label: 'Junior Colts', href: '/teams/junior-colts/' },
+    ],
+  },
+  { label: 'Juniors', href: '/juniors/' },
+  { label: 'Gallery', href: '/gallery/' },
+  { label: 'Sponsors', href: '/sponsors/' },
+  { label: 'Events', href: '/social/' },
+  { label: 'History', href: '/history/' },
+  { label: 'Club', href: '/about/' },
+];
+---
+<header class="masthead" id="masthead">
+  <div class="masthead-inner">
+    <a href="/" class="brand">
+      <div class="brand-logo">
+        <Crest club="wallaroo" size={96} loading="eager" altOverride="" />
+      </div>
+      <div class="brand-text">
+        <span class="name">Wallaroo FC</span>
+        <span class="tag">Tradition lives here · Est. 1867</span>
+      </div>
+    </a>
+    <nav class="primary" aria-label="Main">
+      {navItems.map(item => (
+        item.dropdown ? (
+          <div class="nav-group">
+            <a href={item.href} class="nav-top">{item.label} <span class="chevron" aria-hidden="true">▾</span></a>
+            <div class="dropdown" role="menu">
+              {item.dropdown.map(sub =>
+                'divider' in sub
+                  ? <hr class="drop-divider" />
+                  : <a href={sub.href} class="drop-item" role="menuitem">{sub.label}</a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <a href={item.href}>{item.label}</a>
+        )
+      ))}
+    </nav>
+    <a href="/membership/" class="header-cta">
+      <span>Register 2026</span>
+      <span class="arrow" aria-hidden="true">→</span>
+    </a>
+    <a href="https://tajjpi.com.au" class="built-by" target="_blank" rel="noopener noreferrer" aria-label="Website by TAJJPI">
+      <span class="built-by-label">Website by</span>
+      <span class="built-by-name">TAJJPI</span>
+      <span class="built-by-url">tajjpi.com.au</span>
+    </a>
+  </div>
+</header>
+
+<style>
+  header.masthead { background: var(--white); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 100; transition: box-shadow 0.3s ease; }
+  header.masthead.scrolled { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  .masthead-inner { max-width: 1400px; margin: 0 auto; padding: 6px 32px; display: grid; grid-template-columns: auto 1fr auto auto; gap: 32px; align-items: center; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand-logo { width: 96px; height: 96px; flex-shrink: 0; transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  .brand:hover .brand-logo { transform: rotate(-6deg) scale(1.08); }
+  .brand-text { display: flex; flex-direction: column; line-height: 1; gap: 5px; }
+  .brand-text .name { font-family: var(--display); font-size: 26px; letter-spacing: 0.04em; color: var(--blue-deep); text-transform: uppercase; }
+  .brand-text .tag { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--grey); }
+
+  nav.primary { display: flex; justify-content: center; gap: 32px; align-items: center; }
+  nav.primary > a,
+  .nav-top {
+    font-family: var(--headline); font-size: 16px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 12px 0; position: relative; color: var(--charcoal); display: flex; align-items: center; gap: 4px;
+  }
+  nav.primary > a:hover,
+  .nav-top:hover { color: var(--red); }
+  nav.primary > a::after,
+  .nav-top::after {
+    content: ''; position: absolute; bottom: 6px; left: 0; width: 0; height: 3px;
+    background: var(--red); transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  nav.primary > a:hover::after,
+  .nav-group:hover .nav-top::after { width: 100%; }
+  .chevron { font-size: 10px; line-height: 1; margin-top: 2px; transition: transform 0.2s; }
+  .nav-group:hover .chevron { transform: rotate(180deg); }
+
+  /* Dropdown */
+  .nav-group { position: relative; }
+  .dropdown {
+    display: none; position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    background: var(--white); border: 1px solid var(--line); border-top: 3px solid var(--red);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 180px; padding: 8px 0; z-index: 200;
+  }
+  .nav-group:hover .dropdown,
+  .nav-group:focus-within .dropdown { display: block; }
+  .drop-item {
+    display: block; padding: 10px 20px; font-family: var(--headline); font-size: 14px;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--charcoal); white-space: nowrap;
+  }
+  .drop-item:hover { background: var(--cream); color: var(--red); }
+  .drop-divider { border: none; border-top: 1px solid var(--line); margin: 6px 12px; }
+
+  .header-cta { background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 26px; border: 2px solid var(--red); position: relative; overflow: hidden; transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px; }
+  .header-cta::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: var(--red-deep); transition: left 0.3s ease; }
+  .header-cta:hover::before { left: 0; }
+  .header-cta span { position: relative; z-index: 1; }
+  .header-cta .arrow { position: relative; z-index: 1; transition: transform 0.3s; }
+  .header-cta:hover .arrow { transform: translateX(4px); }
+
+  .built-by { display: flex; flex-direction: column; align-items: center; gap: 1px; text-decoration: none; border-left: 1px solid var(--line); padding-left: 32px; margin-left: 8px; transition: opacity 0.2s; }
+  .built-by:hover { opacity: 0.7; }
+  .built-by-label { font-family: var(--headline); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--grey); }
+  .built-by-name { font-family: var(--display); font-size: 16px; letter-spacing: 0.06em; color: var(--blue-deep); text-transform: uppercase; }
+  .built-by-url { font-family: var(--headline); font-size: 9px; letter-spacing: 0.12em; text-transform: lowercase; color: var(--grey); }
+
+  @media (max-width: 768px) {
+    nav.primary { display: none; }
+    .masthead-inner { grid-template-columns: auto 1fr auto; }
+    .brand-logo { width: 64px; height: 64px; }
+    .brand-text .name { font-size: 20px; }
+    .brand-text .tag { display: none; }
+    .header-cta { padding: 10px 16px; font-size: 13px; }
+    .built-by { display: none; }
+  }
+</style>

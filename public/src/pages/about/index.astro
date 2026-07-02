@@ -1,0 +1,161 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+
+// 2026 committee — sourced from wallaroofc.com/management.
+// Update at the November AGM each year.
+const committee = [
+  { role: 'President',          name: 'Jason Niotis' },
+  { role: 'Vice President',     name: 'Scott Mumford' },
+  { role: 'Vice President',     name: 'Nathan Wright' },
+  { role: 'Secretary',          name: 'Thomas Depledge' },
+  { role: 'Treasurer',          name: 'Sharne Thomson' },
+  { role: 'YPFL Delegate',      name: 'Michael West' },
+  { role: 'Junior Coordinator', name: 'Kristy Smith' },
+  { role: 'Historian',          name: 'Michael West' },
+];
+
+const committeeMembers = [
+  'Janet Errington', 'Shaun Miller', 'Darrell Woods', 'Todd Summerton',
+  'Andrew Dekort', 'Nathan Murphy', 'Jamie Yeates',
+];
+
+const patrons = ['Freddie Hopkins', 'Brian Cooper'];
+---
+<PageLayout
+  title="About · Wallaroo FC"
+  description="About Wallaroo Football Club — committee, contact details, ground info, and how to get in touch."
+>
+  <PageHero
+    eyebrow="The Club"
+    title="About"
+    titleItalic="Wallaroo FC."
+    intro="One of Australia's oldest continuously running football clubs. Volunteer-run, family-friendly, fiercely independent."
+  />
+
+  <section class="about-grid">
+    <div class="container">
+      <div class="grid">
+        <article class="card">
+          <h2>Contact</h2>
+          <dl>
+            <dt>Email</dt>
+            <dd><a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a></dd>
+            <dt>Postal</dt>
+            <dd>PO Box 106, Wallaroo SA 5556</dd>
+            <dt>Facebook</dt>
+            <dd><a href="https://facebook.com/WallarooFC" target="_blank" rel="noopener">facebook.com/WallarooFC</a></dd>
+            <dt>Instagram</dt>
+            <dd><a href="https://instagram.com/wallaroofc" target="_blank" rel="noopener">@wallaroofc</a></dd>
+          </dl>
+        </article>
+
+        <article class="card">
+          <h2>Wallaroo Oval</h2>
+          <dl>
+            <dt>Address</dt>
+            <dd>Cornish Terrace, Wallaroo SA 5556</dd>
+            <dt>Capacity</dt>
+            <dd>Approx. 1,500 (boundary + grandstand)</dd>
+            <dt>Surface</dt>
+            <dd>Couch grass, full size YPFL-compliant</dd>
+            <dt>Clubrooms</dt>
+            <dd>Licensed bar, full kitchen, function space</dd>
+            <dt>Parking</dt>
+            <dd>Free, within the grounds</dd>
+            <dt>Public transport</dt>
+            <dd>Limited — Wallaroo is 160km from Adelaide CBD</dd>
+            <dt>Google Maps</dt>
+            <dd><a href="https://www.google.com/maps/search/Wallaroo+Oval+Cornish+Terrace" target="_blank" rel="noopener">Open in Maps →</a></dd>
+          </dl>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="committee">
+    <div class="container">
+      <h2>2026 Committee</h2>
+      <p class="lede">The volunteers who keep the Bulldogs running. Names update at the AGM each November — until then, the easiest path is to email <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a> and we'll route your question to the right person.</p>
+      <div class="committee-grid">
+        {committee.map(p => (
+          <div class="member">
+            <div class="role">{p.role}</div>
+            <div class="name">{p.name}</div>
+          </div>
+        ))}
+      </div>
+
+      <h3 class="sub-heading">Committee Members</h3>
+      <ul class="members-list">
+        {committeeMembers.map(n => <li>{n}</li>)}
+      </ul>
+
+      <h3 class="sub-heading">Club Patrons</h3>
+      <ul class="patrons-list">
+        {patrons.map(n => <li>{n}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section id="hire" class="hire">
+    <div class="container">
+      <h2>Clubroom hire</h2>
+      <p>The Wallaroo Oval clubrooms are available for hire most weeknights and Sundays in off-season. Licensed bar service available with a coordinator on duty.</p>
+      <p>Suitable for birthdays, family events, community meetings, small weddings. Typical hire 50–120 guests.</p>
+      <p>For pricing and availability email <a href="mailto:admin@wallaroofc.com.au?subject=Clubroom%20hire%20enquiry">admin@wallaroofc.com.au</a> with your preferred date and approximate guest count.</p>
+    </div>
+  </section>
+
+  <section class="contact-form">
+    <div class="container">
+      <h2>General enquiry</h2>
+      <p>For anything we haven't covered. Plays straight through to the committee inbox.</p>
+      <div class="contact-cta">
+        <a href="mailto:admin@wallaroofc.com.au?subject=General%20Enquiry" class="btn-primary">
+          Email the committee
+        </a>
+        <span class="contact-address">admin@wallaroofc.com.au</span>
+      </div>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .about-grid { background: var(--cream); padding: 80px 32px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .card { background: var(--white); padding: 40px 36px; border-radius: 6px; border-top: 4px solid var(--red); }
+  .card h2 { font-family: var(--display); font-size: 32px; color: var(--blue-deep); text-transform: uppercase; margin-bottom: 24px; letter-spacing: 0.02em; }
+  dl dt { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-top: 16px; }
+  dl dd { font-family: var(--serif); font-size: 17px; color: var(--charcoal); margin-bottom: 4px; line-height: 1.5; }
+  dl dd a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; word-break: break-word; }
+
+  .committee { background: var(--white); padding: 100px 32px; }
+  .committee h2 { font-family: var(--display); font-size: clamp(36px, 4.5vw, 64px); color: var(--blue-deep); text-transform: uppercase; margin-bottom: 16px; }
+  .lede { font-family: var(--serif); font-size: 18px; color: var(--charcoal); line-height: 1.6; max-width: 760px; margin-bottom: 40px; }
+  .lede a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
+  .committee-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .member { background: var(--cream); padding: 24px; border-radius: 4px; border-left: 3px solid var(--red); }
+  .role { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+  .name { font-family: var(--display); font-size: 18px; color: var(--blue-deep); text-transform: uppercase; }
+  .sub-heading { font-family: var(--display); font-size: 22px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.04em; margin: 48px 0 16px; }
+  .members-list, .patrons-list { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 12px; }
+  .members-list li, .patrons-list li { font-family: var(--display); font-size: 16px; color: var(--blue-deep); text-transform: uppercase; letter-spacing: 0.02em; background: var(--cream); padding: 10px 18px; border-radius: 4px; border-left: 3px solid var(--red); }
+
+  .hire { background: var(--cream); padding: 100px 32px; }
+  .hire h2 { font-family: var(--display); font-size: clamp(36px, 4.5vw, 64px); color: var(--blue-deep); text-transform: uppercase; margin-bottom: 24px; }
+  .hire p { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--charcoal); margin-bottom: 16px; max-width: 760px; }
+  .hire a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
+
+  .contact-form { background: var(--white); padding: 80px 32px 120px; border-top: 1px solid var(--line); }
+  .contact-form h2 { font-family: var(--display); font-size: clamp(36px, 4.5vw, 64px); color: var(--blue-deep); text-transform: uppercase; margin-bottom: 16px; }
+  .contact-form p { font-family: var(--serif); font-size: 18px; color: var(--charcoal); margin-bottom: 40px; }
+  .contact-cta { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .contact-address { font-family: var(--headline); font-size: 15px; letter-spacing: 0.1em; color: var(--grey); }
+  .btn-primary { display: inline-block; background: var(--red); color: var(--white); font-family: var(--headline); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; padding: 18px 32px; text-decoration: none; transition: all 0.3s; }
+  .btn-primary:hover { background: #8E0B20; transform: translateY(-2px); }
+
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .committee-grid { grid-template-columns: 1fr 1fr; } .about-grid, .committee, .hire, .contact-form { padding: 56px 24px; } }
+  @media (max-width: 500px) { .committee-grid { grid-template-columns: 1fr; } }
+</style>

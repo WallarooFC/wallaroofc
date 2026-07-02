@@ -1,0 +1,476 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+// ── POST handlers (delete, toggle publish, update meta) ──────────────────────
+if (Astro.request.method === 'POST') {
+  const form   = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  if (action === 'delete_photo') {
+    const id          = String(form.get('id') ?? '');
+    const storagePath = String(form.get('storage_path') ?? '');
+    if (storagePath) await db.storage.from('gallery').remove([storagePath]);
+    await db.from('gallery').delete().eq('id', id);
+  }
+
+  if (action === 'toggle_publish') {
+    const id = String(form.get('id') ?? '');
+    const { data: row } = await db.from('gallery').select('published').eq('id', id).single();
+    await db.from('gallery').update({ published: !row?.published }).eq('id', id);
+  }
+
+  if (action === 'update_meta') {
+    const id = String(form.get('id') ?? '');
+    await db.from('gallery').update({
+      alt:           String(form.get('alt')     ?? '').trim(),
+      caption:       String(form.get('caption') ?? '').trim(),
+      round:         form.get('round')  ? parseInt(String(form.get('round')))  : null,
+      grade:         String(form.get('grade') ?? '').trim() || null,
+      display_order: parseInt(String(form.get('display_order') ?? '0')) || 0,
+    }).eq('id', id);
+  }
+
+  return Astro.redirect('/admin/gallery');
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+const { data: photos } = await db
+  .from('gallery')
+  .select('*')
+  .order('display_order', { ascending: true })
+  .order('created_at', { ascending: false });
+
+const GRADES = ['A-Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'U11', 'U9'];
+
+const supabaseUrl  = import.meta.env.PUBLIC_SUPABASE_URL  as string;
+const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
+---
+<AdminLayout title="Gallery">
+
+  <!-- Pass public credentials to client-side upload script -->
+  <div id="gallery-config" data-url={supabaseUrl} data-anon={supabaseAnon} style="display:none"></div>
+
+  <style>
+    /* Upload zone */
+    .upload-zone { border: 2px dashed var(--admin-border); border-radius: 8px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 24px; }
+    .upload-zone.drag-over { border-color: var(--admin-red); background: rgba(200,16,46,0.05); }
+    .uz-icon { font-size: 40px; margin-bottom: 12px; }
+    .upload-zone h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .upload-zone p { color: var(--admin-muted); font-size: 13px; }
+    #file-input { display: none; }
+
+    /* Batch meta */
+    .batch-meta { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .batch-meta-heading { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 14px; }
+    .batch-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .field-group label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 5px; }
+    .field-group select, .field-group input[type="number"], .field-group input[type="text"] { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 4px; padding: 8px 10px; font-size: 13px; }
+
+    /* Preview queue */
+    #preview-queue { display: none; margin-bottom: 24px; }
+    .preview-queue-heading { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .preview-thumb { position: relative; aspect-ratio: 4/3; border-radius: 4px; overflow: hidden; background: var(--admin-sidebar); }
+    .preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .preview-name { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); font-size: 9px; padding: 3px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preview-remove { position: absolute; top: 4px; right: 4px; background: var(--admin-red); border: none; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0; }
+
+    /* Progress */
+    .progress-label { font-size: 12px; color: var(--admin-muted); margin-bottom: 6px; min-height: 18px; }
+    .progress-bar-wrap { display: none; background: var(--admin-border); border-radius: 4px; height: 6px; margin-bottom: 16px; overflow: hidden; }
+    .progress-bar { height: 100%; background: var(--admin-red); width: 0%; transition: width 0.3s; border-radius: 4px; }
+
+    .upload-actions { display: flex; gap: 10px; }
+    .btn-upload { background: var(--admin-red); color: white; border: none; border-radius: 6px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-upload:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-clear { background: transparent; border: 1px solid var(--admin-border); color: var(--admin-muted); border-radius: 6px; padding: 10px 20px; font-size: 13px; cursor: pointer; }
+
+    /* Gallery grid */
+    .section-heading { font-size: 18px; font-weight: 600; margin: 32px 0 16px; display: flex; align-items: center; justify-content: space-between; }
+    .count-badge { font-size: 12px; color: var(--admin-muted); font-weight: 400; }
+    .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+    .gallery-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; overflow: hidden; }
+    .gallery-card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+    .gc-body { padding: 12px; }
+    .gc-caption { font-size: 13px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gc-meta { font-size: 11px; color: var(--admin-muted); margin-bottom: 10px; }
+    .gc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; font-weight: 500; border-radius: 4px; cursor: pointer; border: 1px solid var(--admin-border); background: transparent; color: var(--admin-muted); }
+    .btn-sm:hover { background: rgba(255,255,255,0.05); color: var(--admin-text); }
+    .btn-sm.danger:hover { border-color: var(--admin-red); color: var(--admin-red); }
+    .pub-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: middle; }
+    .pub-dot.on { background: #4ade80; }
+    .pub-dot.off { background: var(--admin-muted); }
+
+    /* Edit modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 10px; width: 520px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .modal-head { padding: 20px 24px; border-bottom: 1px solid var(--admin-border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-head h3 { font-size: 16px; font-weight: 600; }
+    .modal-close { background: transparent; border: none; color: var(--admin-muted); font-size: 20px; cursor: pointer; line-height: 1; }
+    .modal-body { padding: 24px; }
+    .modal-body img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 6px; margin-bottom: 20px; }
+    .form-row { margin-bottom: 16px; }
+    .form-row label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 5px; }
+    .form-row input, .form-row select, .form-row textarea { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 4px; padding: 9px 11px; font-size: 13px; font-family: inherit; }
+    .form-row textarea { resize: vertical; min-height: 60px; }
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal-foot { padding: 16px 24px; border-top: 1px solid var(--admin-border); display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-primary { background: var(--admin-red); color: white; border: none; border-radius: 6px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-secondary { background: transparent; border: 1px solid var(--admin-border); color: var(--admin-muted); border-radius: 6px; padding: 10px 16px; font-size: 13px; cursor: pointer; }
+
+    /* Misc */
+    .empty-state { text-align: center; padding: 48px; color: var(--admin-muted); }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a2e; border: 1px solid var(--admin-border); border-radius: 8px; padding: 12px 20px; font-size: 13px; z-index: 200; opacity: 0; transform: translateY(8px); transition: all 0.25s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: none; }
+    .toast.success { border-color: #4ade80; color: #4ade80; }
+    .toast.error { border-color: var(--admin-red); color: var(--admin-red); }
+  </style>
+
+  <!-- Upload zone -->
+  <div class="upload-zone" id="drop-zone">
+    <div class="uz-icon">🖼</div>
+    <h3>Drag photos here or click to browse</h3>
+    <p>JPEG · PNG · WebP · max 10 MB per file · multiple files OK</p>
+    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple />
+  </div>
+
+  <!-- Preview + batch meta (hidden until files are selected) -->
+  <div id="preview-queue">
+    <p class="preview-queue-heading">Ready to upload (<span id="file-count">0</span> photos)</p>
+
+    <div class="batch-meta">
+      <p class="batch-meta-heading">Batch metadata — applies to all photos in this upload</p>
+      <div class="batch-fields">
+        <div class="field-group">
+          <label>Round</label>
+          <input type="number" id="batch-round" min="1" max="25" placeholder="e.g. 7" />
+        </div>
+        <div class="field-group">
+          <label>Grade</label>
+          <select id="batch-grade">
+            <option value="">— none —</option>
+            {GRADES.map(g => <option value={g}>{g}</option>)}
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Season</label>
+          <input type="number" id="batch-season" value="2026" min="2020" max="2040" />
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-grid" id="preview-grid"></div>
+
+    <p class="progress-label" id="progress-label"></p>
+    <div class="progress-bar-wrap" id="progress-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div class="upload-actions">
+      <button class="btn-upload" id="upload-btn">Upload photos</button>
+      <button class="btn-clear" id="clear-btn">Clear</button>
+    </div>
+  </div>
+
+  <!-- Existing photos -->
+  <div class="section-heading">
+    Uploaded photos
+    <span class="count-badge">{(photos ?? []).length} total</span>
+  </div>
+
+  {(photos ?? []).length === 0 ? (
+    <div class="empty-state">
+      <div class="empty-icon">📷</div>
+      <p>No photos yet. Drag some in above to get started.</p>
+    </div>
+  ) : (
+    <div class="gallery-grid">
+      {(photos ?? []).map((p: any) => (
+        <div class="gallery-card">
+          <img src={p.url} alt={p.alt || ''} loading="lazy" />
+          <div class="gc-body">
+            <div class="gc-caption">
+              {p.caption || <em style="color:var(--admin-muted)">No caption</em>}
+            </div>
+            <div class="gc-meta">
+              <span class={`pub-dot ${p.published ? 'on' : 'off'}`}></span>
+              {p.published ? 'Published' : 'Hidden'}
+              {p.round ? ` · R${p.round}` : ''}
+              {p.grade ? ` · ${p.grade}` : ''}
+            </div>
+            <div class="gc-actions">
+              <button class="btn-sm" onclick={`openEdit(${JSON.stringify(p)})`}>Edit</button>
+              <form method="post" style="display:inline">
+                <input type="hidden" name="action" value="toggle_publish" />
+                <input type="hidden" name="id" value={p.id} />
+                <button type="submit" class="btn-sm">{p.published ? 'Hide' : 'Show'}</button>
+              </form>
+              <form method="post" style="display:inline" onsubmit="return confirm('Delete this photo permanently?')">
+                <input type="hidden" name="action" value="delete_photo" />
+                <input type="hidden" name="id" value={p.id} />
+                <input type="hidden" name="storage_path" value={p.storage_path} />
+                <button type="submit" class="btn-sm danger">Delete</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
+  <!-- Edit modal -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Edit photo</h3>
+        <button class="modal-close" onclick="closeEdit()">✕</button>
+      </div>
+      <div class="modal-body">
+        <img id="modal-img" src="" alt="" />
+        <form method="post" id="edit-form">
+          <input type="hidden" name="action" value="update_meta" />
+          <input type="hidden" name="id" id="modal-id" />
+          <div class="form-row">
+            <label>Alt text (for screen readers)</label>
+            <input type="text" name="alt" id="modal-alt" placeholder="e.g. Bulldogs midfielder contests the ball" />
+          </div>
+          <div class="form-row">
+            <label>Caption</label>
+            <textarea name="caption" id="modal-caption" placeholder="e.g. A-Grade · Round 7 · Wallaroo vs Kadina"></textarea>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label>Round</label>
+              <input type="number" name="round" id="modal-round" min="1" max="25" />
+            </div>
+            <div class="form-row">
+              <label>Grade</label>
+              <select name="grade" id="modal-grade">
+                <option value="">— none —</option>
+                {GRADES.map(g => <option value={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Display order (lower = shown first)</label>
+            <input type="number" name="display_order" id="modal-order" min="0" max="9999" />
+          </div>
+        </form>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-secondary" onclick="closeEdit()">Cancel</button>
+        <button class="btn-primary" onclick="document.getElementById('edit-form').submit()">Save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ── Credentials ───────────────────────────────────────────────────────────
+    const cfg       = document.getElementById('gallery-config') as HTMLElement;
+    const SUPA_URL  = cfg.dataset.url!;
+    const SUPA_ANON = cfg.dataset.anon!;
+
+    // ── Session retrieval ─────────────────────────────────────────────────────
+    function getAccessToken(): string | null {
+      // 1. Cookie set by admin login page
+      const m = document.cookie.match(/sb-access-token=([^;]+)/);
+      if (m) return decodeURIComponent(m[1]);
+      // 2. Supabase localStorage key sb-<project>-auth-token
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)!;
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          try {
+            const v = JSON.parse(localStorage.getItem(k)!);
+            return v?.access_token ?? null;
+          } catch { /* ignore */ }
+        }
+      }
+      return null;
+    }
+
+    // ── Upload to Supabase Storage via REST ───────────────────────────────────
+    async function uploadFile(file: File, path: string, token: string): Promise<string> {
+      const res = await fetch(`${SUPA_URL}/storage/v1/object/gallery/${path}`, {
+        method:  'POST',
+        headers: {
+          apikey:         SUPA_ANON,
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': file.type,
+          'x-upsert':     'false',
+        },
+        body: file,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).message ?? `Storage upload failed (${res.status})`);
+      }
+      return `${SUPA_URL}/storage/v1/object/public/gallery/${path}`;
+    }
+
+    // ── Insert gallery row via REST ───────────────────────────────────────────
+    async function insertRow(row: object, token: string) {
+      const res = await fetch(`${SUPA_URL}/rest/v1/gallery`, {
+        method:  'POST',
+        headers: {
+          apikey:         SUPA_ANON,
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          Prefer:         'return=minimal',
+        },
+        body: JSON.stringify(row),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).message ?? `DB insert failed (${res.status})`);
+      }
+    }
+
+    // ── Toast helper ──────────────────────────────────────────────────────────
+    function showToast(msg: string, type: 'success' | 'error' = 'success') {
+      const el = document.getElementById('toast')!;
+      el.textContent = msg;
+      el.className = `toast show ${type}`;
+      setTimeout(() => { el.className = 'toast'; }, 3500);
+    }
+
+    // ── File queue ────────────────────────────────────────────────────────────
+    let files: File[] = [];
+
+    const dropZone     = document.getElementById('drop-zone')!;
+    const fileInput    = document.getElementById('file-input') as HTMLInputElement;
+    const previewQueue = document.getElementById('preview-queue')!;
+    const previewGrid  = document.getElementById('preview-grid')!;
+    const fileCountEl  = document.getElementById('file-count')!;
+    const uploadBtn    = document.getElementById('upload-btn') as HTMLButtonElement;
+    const clearBtn     = document.getElementById('clear-btn')!;
+    const progressWrap = document.getElementById('progress-wrap')!;
+    const progressBar  = document.getElementById('progress-bar')!;
+    const progressLbl  = document.getElementById('progress-label')!;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      addFiles(Array.from(e.dataTransfer?.files ?? []));
+    });
+    fileInput.addEventListener('change', () => {
+      addFiles(Array.from(fileInput.files ?? []));
+      fileInput.value = '';
+    });
+
+    function addFiles(incoming: File[]) {
+      const valid   = incoming.filter(f => f.type.startsWith('image/') && f.size <= 10 * 1024 * 1024);
+      const skipped = incoming.length - valid.length;
+      if (skipped > 0) showToast(`${skipped} file(s) skipped — must be an image under 10 MB`, 'error');
+      files.push(...valid);
+      renderQueue();
+    }
+
+    function renderQueue() {
+      previewQueue.style.display = files.length ? '' : 'none';
+      fileCountEl.textContent    = String(files.length);
+      previewGrid.innerHTML      = '';
+      files.forEach((f, i) => {
+        const url = URL.createObjectURL(f);
+        const div = document.createElement('div');
+        div.className = 'preview-thumb';
+        div.innerHTML = `
+          <img src="${url}" alt="" />
+          <span class="preview-name">${f.name}</span>
+          <button class="preview-remove" data-i="${i}" title="Remove">✕</button>
+        `;
+        previewGrid.appendChild(div);
+      });
+      previewGrid.querySelectorAll<HTMLButtonElement>('.preview-remove').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          files.splice(Number(btn.dataset.i), 1);
+          renderQueue();
+        });
+      });
+    }
+
+    clearBtn.addEventListener('click', () => { files = []; renderQueue(); });
+
+    // ── Upload handler ────────────────────────────────────────────────────────
+    uploadBtn.addEventListener('click', async () => {
+      if (!files.length) { showToast('No files selected', 'error'); return; }
+
+      const token = getAccessToken();
+      if (!token) { showToast('Not signed in — please sign in again', 'error'); return; }
+
+      const round  = (document.getElementById('batch-round')  as HTMLInputElement).value;
+      const grade  = (document.getElementById('batch-grade')  as HTMLSelectElement).value;
+      const season = parseInt((document.getElementById('batch-season') as HTMLInputElement).value) || 2026;
+
+      uploadBtn.disabled       = true;
+      progressWrap.style.display = 'block';
+      progressBar.style.width  = '0%';
+      let done = 0;
+
+      for (const file of files) {
+        try {
+          progressLbl.textContent = `Uploading ${file.name}…`;
+          const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const uid  = Date.now().toString(36) + Math.random().toString(36).slice(2);
+          const path = `${season}/${uid}.${ext}`;
+          const url  = await uploadFile(file, path, token);
+          await insertRow({
+            season,
+            round:         round ? parseInt(round) : null,
+            grade:         grade || null,
+            url,
+            storage_path:  path,
+            alt:           '',
+            caption:       '',
+            display_order: 0,
+            published:     true,
+          }, token);
+          done++;
+          progressBar.style.width = `${Math.round((done / files.length) * 100)}%`;
+        } catch (err: any) {
+          showToast(`Failed: ${file.name} — ${err.message}`, 'error');
+        }
+      }
+
+      progressLbl.textContent = `Done — ${done} of ${files.length} uploaded`;
+      showToast(`${done} photo${done !== 1 ? 's' : ''} uploaded`, 'success');
+      files = [];
+      setTimeout(() => window.location.reload(), 1400);
+    });
+
+    // ── Edit modal ────────────────────────────────────────────────────────────
+    function openEdit(photo: Record<string, any>) {
+      (document.getElementById('modal-img')     as HTMLImageElement).src   = photo.url;
+      (document.getElementById('modal-id')      as HTMLInputElement).value  = photo.id;
+      (document.getElementById('modal-alt')     as HTMLInputElement).value  = photo.alt     ?? '';
+      (document.getElementById('modal-caption') as HTMLTextAreaElement).value = photo.caption ?? '';
+      (document.getElementById('modal-round')   as HTMLInputElement).value  = photo.round   ?? '';
+      (document.getElementById('modal-grade')   as HTMLSelectElement).value = photo.grade   ?? '';
+      (document.getElementById('modal-order')   as HTMLInputElement).value  = photo.display_order ?? '0';
+      document.getElementById('edit-modal')!.classList.add('open');
+    }
+
+    function closeEdit() {
+      document.getElementById('edit-modal')!.classList.remove('open');
+    }
+
+    (window as any).openEdit  = openEdit;
+    (window as any).closeEdit = closeEdit;
+
+    document.getElementById('edit-modal')?.addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeEdit();
+    });
+  </script>
+</AdminLayout>
