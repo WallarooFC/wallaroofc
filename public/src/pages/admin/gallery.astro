@@ -43,6 +43,31 @@ const { data: photos } = await db
   .order('display_order', { ascending: true })
   .order('created_at', { ascending: false });
 
+// Round options for the selector — drawn from the fixtures so they match the
+// real season (falls back to 1–23 if fixtures aren't loaded).
+const { data: fxRows } = await db
+  .from('fixtures')
+  .select('round, season')
+  .not('round', 'is', null)
+  .order('season', { ascending: false });
+const latestSeason: number = (fxRows ?? [])[0]?.season ?? 2026;
+const roundOptions: number[] = (() => {
+  const s = [...new Set((fxRows ?? [])
+    .filter((f: any) => f.season === latestSeason)
+    .map((f: any) => f.round as number))].sort((a, b) => a - b);
+  return s.length ? s : Array.from({ length: 23 }, (_, i) => i + 1);
+})();
+
+// Group uploaded photos by round for display (unassigned shown last).
+const byRound = new Map<number | 'none', any[]>();
+for (const p of (photos ?? [])) {
+  const key = (p as any).round == null ? 'none' : ((p as any).round as number);
+  if (!byRound.has(key)) byRound.set(key, []);
+  byRound.get(key)!.push(p);
+}
+const roundKeys = ([...byRound.keys()].filter(k => k !== 'none') as number[]).sort((a, b) => a - b);
+const unassigned = byRound.get('none') ?? [];
+
 const supabaseUrl  = import.meta.env.PUBLIC_SUPABASE_URL  as string;
 const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 ---
@@ -89,6 +114,11 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     /* Gallery grid */
     .section-heading { font-size: 18px; font-weight: 600; margin: 32px 0 16px; display: flex; align-items: center; justify-content: space-between; }
     .count-badge { font-size: 12px; color: var(--admin-muted); font-weight: 400; }
+    .round-block { margin-bottom: 28px; }
+    .round-heading { font-size: 15px; font-weight: 600; margin: 22px 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-left: 3px solid var(--admin-red); padding-left: 10px; }
+    .round-heading .count-badge { font-weight: 400; }
+    .round-heading-warn { border-left-color: #facc15; color: #facc15; }
+    .round-heading-warn .count-badge { color: #facc15; opacity: 0.85; }
     .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
     .gallery-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; overflow: hidden; }
     .gallery-card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
@@ -146,12 +176,15 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       <p class="batch-meta-heading">Batch metadata — applies to all photos in this upload</p>
       <div class="batch-fields">
         <div class="field-group">
-          <label>Round</label>
-          <input type="number" id="batch-round" min="1" max="25" placeholder="e.g. 7" />
+          <label>Round <span style="color:var(--admin-red)">*</span></label>
+          <select id="batch-round" required>
+            <option value="">— select round —</option>
+            {roundOptions.map(r => <option value={r}>Round {r}</option>)}
+          </select>
         </div>
         <div class="field-group">
           <label>Season</label>
-          <input type="number" id="batch-season" value="2026" min="2020" max="2040" />
+          <input type="number" id="batch-season" value={latestSeason} min="2020" max="2040" />
         </div>
       </div>
     </div>
@@ -181,37 +214,85 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       <p>No photos yet. Drag some in above to get started.</p>
     </div>
   ) : (
-    <div class="gallery-grid">
-      {(photos ?? []).map((p: any) => (
-        <div class="gallery-card">
-          <img src={p.url} alt={p.alt || ''} loading="lazy" />
-          <div class="gc-body">
-            <div class="gc-caption">
-              {p.caption || <em style="color:var(--admin-muted)">No caption</em>}
-            </div>
-            <div class="gc-meta">
-              <span class={`pub-dot ${p.published ? 'on' : 'off'}`}></span>
-              {p.published ? 'Published' : 'Hidden'}
-              {p.round ? ` · R${p.round}` : ''}
-            </div>
-            <div class="gc-actions">
-              <button class="btn-sm" onclick={`openEdit(${JSON.stringify(p)})`}>Edit</button>
-              <form method="post" style="display:inline">
-                <input type="hidden" name="action" value="toggle_publish" />
-                <input type="hidden" name="id" value={p.id} />
-                <button type="submit" class="btn-sm">{p.published ? 'Hide' : 'Show'}</button>
-              </form>
-              <form method="post" style="display:inline" onsubmit="return confirm('Delete this photo permanently?')">
-                <input type="hidden" name="action" value="delete_photo" />
-                <input type="hidden" name="id" value={p.id} />
-                <input type="hidden" name="storage_path" value={p.storage_path} />
-                <button type="submit" class="btn-sm danger">Delete</button>
-              </form>
-            </div>
+    <Fragment>
+      {roundKeys.map(rk => (
+        <div class="round-block">
+          <div class="round-heading">
+            Round {rk}
+            <span class="count-badge">{byRound.get(rk)!.length} photo{byRound.get(rk)!.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="gallery-grid">
+            {byRound.get(rk)!.map((p: any) => (
+              <div class="gallery-card">
+                <img src={p.url} alt={p.alt || ''} loading="lazy" />
+                <div class="gc-body">
+                  <div class="gc-caption">
+                    {p.caption || <em style="color:var(--admin-muted)">No caption</em>}
+                  </div>
+                  <div class="gc-meta">
+                    <span class={`pub-dot ${p.published ? 'on' : 'off'}`}></span>
+                    {p.published ? 'Published' : 'Hidden'}
+                  </div>
+                  <div class="gc-actions">
+                    <button class="btn-sm" onclick={`openEdit(${JSON.stringify(p)})`}>Edit</button>
+                    <form method="post" style="display:inline">
+                      <input type="hidden" name="action" value="toggle_publish" />
+                      <input type="hidden" name="id" value={p.id} />
+                      <button type="submit" class="btn-sm">{p.published ? 'Hide' : 'Show'}</button>
+                    </form>
+                    <form method="post" style="display:inline" onsubmit="return confirm('Delete this photo permanently?')">
+                      <input type="hidden" name="action" value="delete_photo" />
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="storage_path" value={p.storage_path} />
+                      <button type="submit" class="btn-sm danger">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ))}
-    </div>
+
+      {unassigned.length > 0 && (
+        <div class="round-block">
+          <div class="round-heading round-heading-warn">
+            No round assigned
+            <span class="count-badge">{unassigned.length} photo{unassigned.length !== 1 ? 's' : ''} — won't appear under a round on the website until you set one</span>
+          </div>
+          <div class="gallery-grid">
+            {unassigned.map((p: any) => (
+              <div class="gallery-card">
+                <img src={p.url} alt={p.alt || ''} loading="lazy" />
+                <div class="gc-body">
+                  <div class="gc-caption">
+                    {p.caption || <em style="color:var(--admin-muted)">No caption</em>}
+                  </div>
+                  <div class="gc-meta">
+                    <span class={`pub-dot ${p.published ? 'on' : 'off'}`}></span>
+                    {p.published ? 'Published' : 'Hidden'}
+                  </div>
+                  <div class="gc-actions">
+                    <button class="btn-sm" onclick={`openEdit(${JSON.stringify(p)})`}>Edit</button>
+                    <form method="post" style="display:inline">
+                      <input type="hidden" name="action" value="toggle_publish" />
+                      <input type="hidden" name="id" value={p.id} />
+                      <button type="submit" class="btn-sm">{p.published ? 'Hide' : 'Show'}</button>
+                    </form>
+                    <form method="post" style="display:inline" onsubmit="return confirm('Delete this photo permanently?')">
+                      <input type="hidden" name="action" value="delete_photo" />
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="storage_path" value={p.storage_path} />
+                      <button type="submit" class="btn-sm danger">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Fragment>
   )}
 
   <!-- Edit modal -->
@@ -236,7 +317,10 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           </div>
           <div class="form-row">
             <label>Round</label>
-            <input type="number" name="round" id="modal-round" min="1" max="25" />
+            <select name="round" id="modal-round">
+              <option value="">— none —</option>
+              {roundOptions.map(r => <option value={r}>Round {r}</option>)}
+            </select>
           </div>
           <div class="form-row">
             <label>Display order (lower = shown first)</label>
@@ -390,8 +474,10 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       const token = getAccessToken();
       if (!token) { showToast('Not signed in — please sign in again', 'error'); return; }
 
-      const round  = (document.getElementById('batch-round')  as HTMLInputElement).value;
+      const round  = (document.getElementById('batch-round')  as HTMLSelectElement).value;
       const season = parseInt((document.getElementById('batch-season') as HTMLInputElement).value) || 2026;
+
+      if (!round) { showToast('Pick a round before uploading', 'error'); return; }
 
       uploadBtn.disabled       = true;
       progressWrap.style.display = 'block';
@@ -434,7 +520,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       (document.getElementById('modal-id')      as HTMLInputElement).value  = photo.id;
       (document.getElementById('modal-alt')     as HTMLInputElement).value  = photo.alt     ?? '';
       (document.getElementById('modal-caption') as HTMLTextAreaElement).value = photo.caption ?? '';
-      (document.getElementById('modal-round')   as HTMLInputElement).value  = photo.round   ?? '';
+      (document.getElementById('modal-round')   as HTMLSelectElement).value = photo.round != null ? String(photo.round) : '';
       (document.getElementById('modal-order')   as HTMLInputElement).value  = photo.display_order ?? '0';
       document.getElementById('edit-modal')!.classList.add('open');
     }
