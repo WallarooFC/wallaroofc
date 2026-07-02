@@ -1,0 +1,296 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+const canEdit: boolean = Astro.locals.canEdit ?? false;
+const userId: string | undefined = (Astro.locals.user as any)?.id;
+
+let errorMsg = '';
+
+// ── Adelaide wall-clock (from datetime-local) → UTC ISO ───────────────────────
+function adelaideLocalToIso(local: string): string | null {
+  if (!local) return null;
+  const [datePart, timePart = '00:00'] = local.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  if (!y || !m || !d || hh === undefined || mm === undefined) return null;
+  const asUtc = Date.UTC(y, m - 1, d, hh, mm, 0);
+  const ref = new Date(asUtc);
+  const dtf = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Adelaide', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts = Object.fromEntries(dtf.formatToParts(ref).map(p => [p.type, p.value]));
+  const asAdel = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  const offset = asAdel - ref.getTime();
+  return new Date(asUtc - offset).toISOString();
+}
+
+function fmtAdelaide(iso: string): string {
+  return new Date(iso).toLocaleString('en-AU', {
+    timeZone: 'Australia/Adelaide', dateStyle: 'medium', timeStyle: 'short',
+  });
+}
+
+// ── POST handlers ─────────────────────────────────────────────────────────────
+if (Astro.request.method === 'POST' && canEdit) {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  try {
+    if (action === 'create_template' || action === 'update_template') {
+      const body = {
+        kind: 'takeover',
+        heading: String(form.get('heading') ?? '').trim(),
+        body: String(form.get('body') ?? '').trim(),
+        ctaLabel: String(form.get('ctaLabel') ?? '').trim() || null,
+        ctaUrl: String(form.get('ctaUrl') ?? '').trim() || null,
+        imageUrl: String(form.get('imageUrl') ?? '').trim() || null,
+      };
+      const title = String(form.get('title') ?? '').trim();
+      if (action === 'create_template') {
+        const { error } = await db.from('templates').insert({
+          title, category: 'landing_takeover', body, created_by: userId ?? null,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await db.from('templates')
+          .update({ title, body })
+          .eq('id', String(form.get('template_id')));
+        if (error) throw error;
+      }
+    } else if (action === 'delete_template') {
+      const { error } = await db.from('templates').delete().eq('id', String(form.get('template_id')));
+      if (error) throw error;
+    } else if (action === 'schedule') {
+      const startsAt = adelaideLocalToIso(String(form.get('starts') ?? ''));
+      const endsAt = adelaideLocalToIso(String(form.get('ends') ?? ''));
+      if (!startsAt || !endsAt) throw new Error('Set both a start and end time.');
+      if (new Date(endsAt) <= new Date(startsAt)) throw new Error('End must be after start.');
+      const { error } = await db.from('landing_takeovers').insert({
+        template_id: String(form.get('template_id')),
+        starts_at: startsAt, ends_at: endsAt, created_by: userId ?? null,
+      });
+      if (error) {
+        throw new Error(
+          error.code === '23P01' || /overlap/i.test(error.message)
+            ? 'That window overlaps an existing active takeover. Pause or cancel the other one first.'
+            : error.message,
+        );
+      }
+    } else if (action === 'pause' || action === 'resume') {
+      const { error } = await db.from('landing_takeovers')
+        .update({ is_paused: action === 'pause' })
+        .eq('id', String(form.get('takeover_id')));
+      if (error) throw error;
+    } else if (action === 'cancel') {
+      const { error } = await db.from('landing_takeovers').delete().eq('id', String(form.get('takeover_id')));
+      if (error) throw error;
+    }
+
+    if (!errorMsg) return Astro.redirect('/admin/takeovers');
+  } catch (e: any) {
+    errorMsg = e?.message ?? 'Something went wrong.';
+  }
+}
+
+// ── Load data ────────────────────────────────────────────────────────────────
+const { data: templates } = await db
+  .from('templates')
+  .select('id, title, body, updated_at')
+  .eq('category', 'landing_takeover')
+  .order('updated_at', { ascending: false });
+
+const { data: takeovers } = await db
+  .from('landing_takeovers')
+  .select('id, starts_at, ends_at, is_paused, template:templates(id, title)')
+  .order('starts_at', { ascending: false });
+
+const nowMs = Date.now();
+function statusOf(t: any): { label: string; cls: string } {
+  const s = new Date(t.starts_at).getTime();
+  const e = new Date(t.ends_at).getTime();
+  if (t.is_paused) return { label: 'Paused', cls: 'paused' };
+  if (nowMs >= e) return { label: 'Ended', cls: 'ended' };
+  if (nowMs < s) return { label: 'Scheduled', cls: 'scheduled' };
+  return { label: 'Live now', cls: 'live' };
+}
+---
+<AdminLayout title="Announcements">
+  {errorMsg && <div class="err">{errorMsg}</div>}
+
+  {!canEdit && (
+    <p class="muted">You have view-only access to announcements.</p>
+  )}
+
+  <!-- ── Scheduled takeovers ─────────────────────────────────────────── -->
+  <section class="panel">
+    <h2>Landing takeovers</h2>
+    <p class="muted">A takeover pops up as a full-screen modal on the website home page during its window (Adelaide time). Only one can be live at a time.</p>
+
+    {(takeovers ?? []).length === 0 && <div class="empty">No takeovers scheduled yet.</div>}
+
+    <div class="rows">
+      {(takeovers ?? []).map((t: any) => {
+        const st = statusOf(t);
+        return (
+          <div class="row">
+            <div class="row-main">
+              <span class={`badge ${st.cls}`}>{st.label}</span>
+              <strong>{t.template?.title ?? 'Untitled'}</strong>
+              <span class="muted">{fmtAdelaide(t.starts_at)} → {fmtAdelaide(t.ends_at)}</span>
+            </div>
+            {canEdit && (
+              <div class="row-actions">
+                {st.cls !== 'ended' && !t.is_paused && (
+                  <form method="post"><input type="hidden" name="action" value="pause"/><input type="hidden" name="takeover_id" value={t.id}/><button class="btn ghost">Pause</button></form>
+                )}
+                {st.cls !== 'ended' && t.is_paused && (
+                  <form method="post"><input type="hidden" name="action" value="resume"/><input type="hidden" name="takeover_id" value={t.id}/><button class="btn ghost">Resume</button></form>
+                )}
+                <form method="post" onsubmit="return confirm('Cancel this takeover?')"><input type="hidden" name="action" value="cancel"/><input type="hidden" name="takeover_id" value={t.id}/><button class="btn danger">Cancel</button></form>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+
+    {canEdit && (templates ?? []).length > 0 && (
+      <form method="post" class="schedule-form">
+        <input type="hidden" name="action" value="schedule"/>
+        <h3>Schedule a takeover</h3>
+        <div class="grid3">
+          <label>Template
+            <select name="template_id" required>
+              {(templates ?? []).map((tpl: any) => <option value={tpl.id}>{tpl.title}</option>)}
+            </select>
+          </label>
+          <label>Starts (Adelaide)
+            <input type="datetime-local" name="starts" required/>
+          </label>
+          <label>Ends (Adelaide)
+            <input type="datetime-local" name="ends" required/>
+          </label>
+        </div>
+        <button class="btn primary" type="submit">Schedule takeover</button>
+      </form>
+    )}
+
+    {canEdit && (templates ?? []).length === 0 && (
+      <p class="muted">Create a takeover template below before you can schedule one.</p>
+    )}
+  </section>
+
+  <!-- ── Templates ───────────────────────────────────────────────────── -->
+  <section class="panel">
+    <h2>Takeover templates</h2>
+    <p class="muted">Reusable announcement content. Set an <strong>Image URL</strong> to show a flyer graphic as the whole popup; otherwise the heading, body and button are used.</p>
+
+    <div class="tpl-grid">
+      {(templates ?? []).map((tpl: any) => (
+        <details class="tpl">
+          <summary>
+            <strong>{tpl.title}</strong>
+            {tpl.body?.imageUrl ? <span class="tag">🖼 Image</span> : <span class="tag">Text</span>}
+          </summary>
+          {canEdit ? (
+            <form method="post" class="tpl-form">
+              <input type="hidden" name="action" value="update_template"/>
+              <input type="hidden" name="template_id" value={tpl.id}/>
+              <label>Title<input type="text" name="title" value={tpl.title} required/></label>
+              <label>Heading<input type="text" name="heading" value={tpl.body?.heading ?? ''} required/></label>
+              <label>Body<textarea name="body" rows="3" required>{tpl.body?.body ?? ''}</textarea></label>
+              <div class="grid2">
+                <label>CTA label<input type="text" name="ctaLabel" value={tpl.body?.ctaLabel ?? ''}/></label>
+                <label>CTA URL<input type="url" name="ctaUrl" value={tpl.body?.ctaUrl ?? ''}/></label>
+              </div>
+              <label>Image URL (optional)<input type="url" name="imageUrl" value={tpl.body?.imageUrl ?? ''} placeholder="https://wallaroofc.com/takeover/thursday-night.png"/></label>
+              <div class="tpl-actions">
+                <button class="btn primary" type="submit">Save</button>
+              </div>
+            </form>
+            <form method="post" class="tpl-delete" onsubmit="return confirm('Delete this template? Any takeovers using it are removed too.')">
+              <input type="hidden" name="action" value="delete_template"/>
+              <input type="hidden" name="template_id" value={tpl.id}/>
+              <button class="btn danger" type="submit">Delete template</button>
+            </form>
+          ) : (
+            <div class="tpl-view">
+              <div><b>Heading:</b> {tpl.body?.heading}</div>
+              <div><b>Body:</b> {tpl.body?.body}</div>
+              {tpl.body?.imageUrl && <div><b>Image:</b> {tpl.body.imageUrl}</div>}
+            </div>
+          )}
+        </details>
+      ))}
+      {(templates ?? []).length === 0 && <div class="empty">No templates yet.</div>}
+    </div>
+
+    {canEdit && (
+      <form method="post" class="tpl-form new">
+        <input type="hidden" name="action" value="create_template"/>
+        <h3>New takeover template</h3>
+        <label>Title<input type="text" name="title" required placeholder="e.g. Thursday Night Meals"/></label>
+        <label>Heading<input type="text" name="heading" required placeholder="Thursday Night · From 5:30pm"/></label>
+        <label>Body<textarea name="body" rows="3" required placeholder="Short announcement text…"></textarea></label>
+        <div class="grid2">
+          <label>CTA label<input type="text" name="ctaLabel" placeholder="See the menu"/></label>
+          <label>CTA URL<input type="url" name="ctaUrl" placeholder="https://wallaroofc.com/…"/></label>
+        </div>
+        <label>Image URL (optional)<input type="url" name="imageUrl" placeholder="https://wallaroofc.com/takeover/thursday-night.png"/></label>
+        <button class="btn primary" type="submit">Create template</button>
+      </form>
+    )}
+  </section>
+</AdminLayout>
+
+<style>
+  .panel { background: var(--admin-card, #0A1F3D); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 22px 24px; margin-bottom: 24px; }
+  h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.04em; margin-bottom: 4px; }
+  h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.7); margin: 18px 0 10px; }
+  .muted { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 14px; }
+  .err { background: rgba(200,16,46,0.12); border: 1px solid rgba(200,16,46,0.35); color: #f87171; border-radius: 6px; padding: 10px 14px; font-size: 13px; margin-bottom: 18px; }
+  .empty { color: rgba(255,255,255,0.4); font-size: 13px; padding: 14px 0; }
+
+  .rows { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 14px; flex-wrap: wrap; }
+  .row-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .row-main strong { font-size: 14px; }
+  .row-actions { display: flex; gap: 8px; }
+
+  .badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+  .badge.live { background: rgba(34,197,94,0.18); color: #4ade80; }
+  .badge.scheduled { background: rgba(59,130,246,0.18); color: #60a5fa; }
+  .badge.paused { background: rgba(234,179,8,0.18); color: #facc15; }
+  .badge.ended { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.45); }
+
+  .btn { border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: #C8102E; color: #fff; }
+  .btn.primary:hover { background: #8E0B20; }
+  .btn.ghost { background: transparent; border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.8); }
+  .btn.ghost:hover { border-color: #fff; }
+  .btn.danger { background: transparent; border: 1px solid rgba(200,16,46,0.4); color: #f87171; }
+  .btn.danger:hover { background: rgba(200,16,46,0.12); }
+
+  form { margin: 0; }
+  .schedule-form { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; }
+  label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.6); margin-bottom: 12px; }
+  input, select, textarea { background: #0D1B2E; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 9px 10px; color: #F0F4F8; font-size: 14px; font-family: inherit; text-transform: none; letter-spacing: normal; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #C8102E; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 14px; }
+  @media (max-width: 700px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  .tpl-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  details.tpl { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 14px; }
+  details.tpl summary { cursor: pointer; padding: 10px 0; display: flex; align-items: center; gap: 10px; }
+  .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.06); border-radius: 3px; padding: 2px 6px; }
+  .tpl-form { padding: 8px 0 14px; }
+  .tpl-form.new { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; }
+  .tpl-actions { display: flex; gap: 10px; }
+  .tpl-view { font-size: 13px; color: rgba(255,255,255,0.75); display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; }
+</style>
