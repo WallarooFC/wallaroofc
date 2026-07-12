@@ -1,0 +1,169 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+const search = (Astro.url.searchParams.get('q') ?? '').trim();
+const typeFilter = Astro.url.searchParams.get('type') ?? 'all';
+
+const { data: rows } = await db
+  .from('club_members')
+  .select('id, membership_number, full_name, membership_type, email, phone, postal_address')
+  .order('membership_number');
+
+const members = rows ?? [];
+
+// ── Group by owner ────────────────────────────────────────────────────────
+// One row per person/sponsor. If a name owns multiple membership numbers
+// (e.g. Pirie Signs #147, 148, 149, 150), collapse to a single group and
+// join the numbers with commas. Vacant slots (no name) stay as their own
+// rows so gaps remain visible.
+type Group = {
+  key: string;               // grouping key
+  numbers: number[];         // all numbers held by the group, ascending
+  full_name: string | null;
+  membership_type: string | null;
+  email: string | null;
+  phone: string | null;
+  postal_address: string | null;
+  is_vacant: boolean;
+};
+
+const byKey = new Map<string, Group>();
+for (const m of members) {
+  const name = (m.full_name ?? '').trim();
+  const isVacant = !name;
+  // Named members grouped by name+type+email so the "Todd Summerton" that
+  // sits on both the committee (#39) and the player list (#240) stays on
+  // separate rows.
+  const key = isVacant
+    ? `__vacant__${m.membership_number}`
+    : `${name.toLowerCase()}|${(m.membership_type ?? '').toLowerCase()}|${(m.email ?? '').toLowerCase()}`;
+
+  const existing = byKey.get(key);
+  if (existing) {
+    existing.numbers.push(m.membership_number);
+    // Prefer any non-null detail from later rows to backfill gaps.
+    existing.phone ||= m.phone;
+    existing.email ||= m.email;
+    existing.postal_address ||= m.postal_address;
+  } else {
+    byKey.set(key, {
+      key,
+      numbers: [m.membership_number],
+      full_name: m.full_name,
+      membership_type: m.membership_type,
+      email: m.email,
+      phone: m.phone,
+      postal_address: m.postal_address,
+      is_vacant: isVacant,
+    });
+  }
+}
+
+// Sort each group's numbers, then sort the groups by the lowest number they own.
+const groups: Group[] = Array.from(byKey.values())
+  .map(g => ({ ...g, numbers: g.numbers.slice().sort((a, b) => a - b) }))
+  .sort((a, b) => a.numbers[0] - b.numbers[0]);
+
+// Distinct membership types for the filter dropdown
+const types = Array.from(new Set(members.map((m: any) => m.membership_type).filter(Boolean))).sort() as string[];
+
+// Filter after grouping so a search for "62" surfaces the whole
+// "1, 2, 62" row instead of only the individual member row.
+const filtered = groups.filter(g => {
+  const q = search.toLowerCase();
+  const numbersStr = g.numbers.join(', ');
+  const matchSearch = !q
+    || numbersStr.includes(q)
+    || (g.full_name ?? '').toLowerCase().includes(q)
+    || (g.email ?? '').toLowerCase().includes(q);
+  const matchType = typeFilter === 'all' || g.membership_type === typeFilter;
+  return matchSearch && matchType;
+});
+
+const withDetails = groups.filter(g => !g.is_vacant).length;
+const totalSlots = members.length;
+---
+<AdminLayout title="Club Membership">
+
+  <div class="section-label">Membership Register</div>
+
+  <div class="toolbar">
+    <form method="get" class="filters">
+      <input name="q" type="search" placeholder="Search number, name, email…" value={search} class="search-input" />
+      <select name="type" class="grade-select" onchange="this.form.submit()">
+        <option value="all">All types</option>
+        {types.map((t) => <option value={t} selected={typeFilter === t}>{t}</option>)}
+      </select>
+      <button type="submit" class="btn-filter">Filter</button>
+    </form>
+    <div class="counts">
+      <span class="count">{totalSlots} slots · {withDetails} member{withDetails === 1 ? '' : 's'} · {filtered.length} shown</span>
+    </div>
+  </div>
+
+  {filtered.length === 0 ? (
+    <div class="empty-section">No members match those filters.</div>
+  ) : (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="col-num">#</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Postal address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.map(g => (
+          <tr class={g.is_vacant ? 'row-empty' : ''}>
+            <td class="col-num">{g.numbers.join(', ')}</td>
+            <td>{g.is_vacant ? <span class="mute">— vacant —</span> : g.full_name}</td>
+            <td>{g.membership_type ?? ''}</td>
+            <td>
+              {g.email ? (
+                <a href={`mailto:${g.email}`} class="cell-link">{g.email}</a>
+              ) : ''}
+            </td>
+            <td>{g.phone ?? ''}</td>
+            <td class="col-addr">{g.postal_address ?? ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+
+</AdminLayout>
+
+<style>
+  .section-label { font-family: var(--headline, sans-serif); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--admin-muted); margin: 24px 0 12px; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+  .filters { display: flex; gap: 8px; flex: 1; min-width: 260px; }
+  .search-input { flex: 1; min-width: 160px; background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  .search-input:focus { outline: none; border-color: #C8102E; }
+  .grade-select { background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  .btn-filter { background: #C8102E; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-filter:hover { background: #a00e26; }
+  .counts { font-size: 12px; color: var(--admin-muted); }
+  .count { white-space: nowrap; }
+
+  .empty-section { padding: 24px; text-align: center; color: var(--admin-muted); background: var(--admin-card); border: 1px dashed var(--admin-border); border-radius: 6px; }
+
+  .data-table { width: 100%; border-collapse: collapse; background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 6px; overflow: hidden; }
+  .data-table th, .data-table td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--admin-border); vertical-align: top; }
+  .data-table th { background: rgba(255,255,255,0.03); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: var(--admin-muted); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover { background: rgba(200,16,46,0.04); }
+  .col-num { text-align: right; min-width: 60px; font-family: monospace; color: var(--admin-muted); white-space: nowrap; }
+  .col-addr { max-width: 280px; }
+  .row-empty td { opacity: 0.4; }
+  .mute { color: var(--admin-muted); font-style: italic; }
+  .cell-link { color: var(--admin-text); text-decoration: none; }
+  .cell-link:hover { color: #C8102E; text-decoration: underline; }
+</style>
