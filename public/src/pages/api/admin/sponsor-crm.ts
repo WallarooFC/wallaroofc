@@ -3,18 +3,37 @@ import { getAdminClient, supabase } from '../../../lib/supabase';
 
 export const prerender = false;
 
-async function getRole(request: Request) {
+async function getAuth(request: Request) {
   const cookie = request.headers.get('cookie') ?? '';
   const token = cookie.match(/sb-access-token=([^;]+)/)?.[1];
   if (!token) return null;
   const { data } = await supabase.auth.getUser(token);
-  if (!data?.user) return { role: null, userId: null };
-  const { data: profile } = await getAdminClient()
-    .from('profiles').select('role').eq('id', data.user.id).single();
-  return { role: profile?.role ?? null, userId: data.user.id };
-}
+  if (!data?.user) return null;
+  const admin = getAdminClient();
+  const { data: profile } = await admin
+    .from('profiles').select('role, full_name').eq('id', data.user.id).single();
+  if (!profile) return null;
 
-const WRITE_ROLES = ['admin', 'secretary', 'president', 'treasurer'];
+  // Anyone marked admin has global write.
+  // Otherwise, check the per-page permissions for sponsor-register edit.
+  let canEditSponsors = profile.role === 'admin';
+  if (!canEditSponsors) {
+    const { data: perm } = await admin
+      .from('admin_permissions')
+      .select('can_edit')
+      .eq('user_id', data.user.id)
+      .eq('page', 'sponsor-register')
+      .maybeSingle();
+    canEditSponsors = perm?.can_edit === true;
+  }
+
+  return {
+    userId:   data.user.id,
+    role:     profile.role,
+    name:     profile.full_name ?? null,
+    canWrite: canEditSponsors,
+  };
+}
 
 function json(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -37,10 +56,9 @@ async function readBody(request: Request): Promise<Record<string, any>> {
 }
 
 export const POST: APIRoute = async ({ request, redirect }) => {
-  const auth = await getRole(request);
-  if (!auth?.role || !WRITE_ROLES.includes(auth.role)) {
-    return json({ ok: false, error: 'Unauthorized' }, 401);
-  }
+  const auth = await getAuth(request);
+  if (!auth) return json({ ok: false, error: 'Unauthorized' }, 401);
+  if (!auth.canWrite) return json({ ok: false, error: 'No edit permission for Sponsor Register' }, 403);
   const userId = auth.userId;
 
   const body = await readBody(request);
@@ -51,7 +69,12 @@ export const POST: APIRoute = async ({ request, redirect }) => {
 
   const admin = getAdminClient();
   const isFormPost = !(request.headers.get('content-type') ?? '').includes('application/json');
-  const redirectTo = `/admin/sponsor-register/${memberId}?saved=${action.startsWith('delete') ? 'deleted' : action.includes('contact') ? 'contact' : 'activity'}`;
+  const savedFlash =
+    action.startsWith('delete')  ? 'deleted' :
+    action === 'update_sponsor_details' ? 'details' :
+    action.includes('contact')   ? 'contact' :
+    'activity';
+  const redirectTo = `/admin/sponsor-register/${memberId}?saved=${savedFlash}`;
 
   // ── Contacts ────────────────────────────────────────────────────────────
   if (action === 'add_contact') {
@@ -99,6 +122,70 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     if (!body.id) return json({ ok: false, error: 'id required' }, 400);
     const { error } = await admin.from('sponsor_activities').delete().eq('id', body.id).eq('member_id', memberId);
     if (error) return json({ ok: false, error: error.message }, 500);
+    return isFormPost ? redirect(redirectTo, 303) : json({ ok: true });
+  }
+
+  // ── Sponsor details edit ────────────────────────────────────────────────
+  // Applies changes to every sibling row in the sponsor group so the register
+  // grouping stays intact (a sponsor with three membership numbers gets all
+  // three rows updated at once). Logs an automatic diff note on the anchor.
+  if (action === 'update_sponsor_details') {
+    if (!body.full_name?.trim()) {
+      return json({ ok: false, error: 'Sponsor name is required' }, 400);
+    }
+
+    const siblingIds = Array.isArray(body.sibling_ids)
+      ? body.sibling_ids
+      : String(body.sibling_ids ?? '').split(',').filter(Boolean);
+    if (siblingIds.length === 0) siblingIds.push(memberId);
+
+    // Read current values (from the anchor) so we can build a human-readable diff.
+    const { data: before } = await admin
+      .from('club_members')
+      .select('full_name, membership_type, email, phone, postal_address')
+      .eq('id', memberId)
+      .single();
+
+    const patch = {
+      full_name:       body.full_name.trim(),
+      membership_type: body.membership_type?.trim() || null,
+      email:           body.email?.trim() || null,
+      phone:           body.phone?.trim() || null,
+      postal_address:  body.postal_address?.trim() || null,
+    };
+
+    const { error } = await admin.from('club_members').update(patch).in('id', siblingIds);
+    if (error) return json({ ok: false, error: error.message }, 500);
+
+    // Build a diff summary for the audit log.
+    if (before) {
+      const changes: string[] = [];
+      const fields: Array<[keyof typeof patch, string]> = [
+        ['full_name',       'Name'],
+        ['membership_type', 'Type'],
+        ['email',           'Email'],
+        ['phone',           'Phone'],
+        ['postal_address',  'Postal'],
+      ];
+      for (const [key, label] of fields) {
+        const oldVal = (before as any)[key] ?? '';
+        const newVal = patch[key] ?? '';
+        if (oldVal !== newVal) {
+          changes.push(`${label}: "${oldVal || '(blank)'}" → "${newVal || '(blank)'}"`);
+        }
+      }
+      if (changes.length > 0) {
+        await admin.from('sponsor_activities').insert({
+          member_id:     memberId,
+          activity_type: 'note',
+          activity_date: new Date().toISOString().slice(0, 10),
+          summary:       `Details edited by ${auth.name ?? 'portal user'}`,
+          details:       changes.join('\n') + `\n\n(Applied to ${siblingIds.length} membership row${siblingIds.length === 1 ? '' : 's'}.)`,
+          created_by:    userId,
+        });
+      }
+    }
+
     return isFormPost ? redirect(redirectTo, 303) : json({ ok: true });
   }
 
