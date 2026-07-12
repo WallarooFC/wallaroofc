@@ -1,0 +1,474 @@
+---
+export const prerender = false;
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../../lib/supabase';
+
+const { id } = Astro.params;
+const db = getAdminClient();
+
+// ── Load the anchor member row ─────────────────────────────────────────────
+const { data: anchor } = await db
+  .from('club_members')
+  .select('id, membership_number, full_name, membership_type, email, phone, postal_address, notes')
+  .eq('id', id)
+  .single();
+
+if (!anchor) {
+  return Astro.redirect('/admin/sponsor-register?missing=1', 302);
+}
+
+// ── Find sibling numbers held by the same sponsor group ────────────────────
+// Match by (full_name, tier-family, email) — same logic as the register.
+function tierFamily(raw: string | null): string[] {
+  const t = (raw ?? '').toLowerCase();
+  if (t.includes('major'))    return ['major'];
+  if (t.includes('diamond'))  return ['diamond'];
+  if (t.includes('platinum')) return ['platinum'];
+  if (t.includes('vip'))      return ['vip'];
+  if (t.includes('gold'))     return ['gold'];
+  if (t.includes('silver'))   return ['silver'];
+  if (t.includes('bronze') || t.includes('parton') || t.includes('patron')) return ['bronze', 'parton', 'patron'];
+  return ['club'];
+}
+const family = tierFamily(anchor.membership_type);
+
+const { data: siblings } = await db
+  .from('club_members')
+  .select('id, membership_number, membership_type, email')
+  .eq('full_name', anchor.full_name);
+
+const siblingNumbers = (siblings ?? [])
+  .filter(s => {
+    if ((s.email ?? '') !== (anchor.email ?? '')) return false;
+    const st = (s.membership_type ?? '').toLowerCase();
+    return family.some(f => st.includes(f));
+  })
+  .map(s => s.membership_number)
+  .sort((a, b) => a - b);
+
+// ── Load contacts + activity log ───────────────────────────────────────────
+const { data: contacts } = await db
+  .from('sponsor_contacts')
+  .select('*')
+  .eq('member_id', id)
+  .order('is_primary', { ascending: false })
+  .order('created_at');
+
+const { data: activities } = await db
+  .from('sponsor_activities')
+  .select('*')
+  .eq('member_id', id)
+  .order('activity_date', { ascending: false })
+  .order('created_at', { ascending: false });
+
+const openFollowUps = (activities ?? []).filter(a =>
+  a.follow_up_date && new Date(a.follow_up_date) >= new Date(new Date().toDateString())
+);
+
+const savedFlash = Astro.url.searchParams.get('saved');
+---
+<AdminLayout title={anchor.full_name}>
+
+  <div class="breadcrumb">
+    <a href="/admin/sponsor-register">← Sponsor Register</a>
+  </div>
+
+  {savedFlash && (
+    <div class="flash">✓ {savedFlash === 'contact' ? 'Contact saved.' : savedFlash === 'activity' ? 'Activity logged.' : 'Saved.'}</div>
+  )}
+
+  <div class="sponsor-header">
+    <div class="sponsor-header-main">
+      <div class="sponsor-tier">{anchor.membership_type ?? 'Sponsor'} · #{siblingNumbers.join(', ')}</div>
+      <h1>{anchor.full_name}</h1>
+      <div class="sponsor-contact-strip">
+        {anchor.email
+          ? <a class="contact-chip email" href={`mailto:${anchor.email}?subject=${encodeURIComponent('Wallaroo FC — ' + anchor.full_name)}`}>✉ {anchor.email}</a>
+          : <span class="contact-chip missing">✉ email missing</span>}
+        {anchor.phone
+          ? <a class="contact-chip" href={`tel:${anchor.phone}`}>☎ {anchor.phone}</a>
+          : <span class="contact-chip missing">☎ phone missing</span>}
+        {anchor.postal_address && <span class="contact-chip">✉ {anchor.postal_address}</span>}
+      </div>
+    </div>
+  </div>
+
+  {openFollowUps.length > 0 && (
+    <div class="followup-strip">
+      <strong>Open follow-ups:</strong>
+      {openFollowUps.map(a => (
+        <span class="followup-pill">{a.follow_up_date}: {a.summary}</span>
+      ))}
+    </div>
+  )}
+
+  <div class="two-col">
+    <!-- ── Contacts panel ─────────────────────────────────────────────── -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Contacts <span class="dim">({contacts?.length ?? 0})</span></h2>
+        <button type="button" class="btn-small" data-toggle="contact-form">+ Add contact</button>
+      </div>
+
+      <form id="contact-form" class="panel-form" data-form="contact" hidden>
+        <input type="hidden" name="member_id" value={anchor.id} />
+        <div class="row-2">
+          <label>Name<input name="full_name" required /></label>
+          <label>Role<input name="role" placeholder="e.g. Owner, Marketing manager" /></label>
+        </div>
+        <div class="row-2">
+          <label>Email<input name="email" type="email" /></label>
+          <label>Phone<input name="phone" /></label>
+        </div>
+        <label class="checkbox"><input name="is_primary" type="checkbox" /> Primary contact</label>
+        <label>Notes<textarea name="notes" rows="2"></textarea></label>
+        <div class="row-right">
+          <button type="button" class="btn-cancel" data-cancel="contact-form">Cancel</button>
+          <button type="submit" class="btn-primary">Save contact</button>
+        </div>
+      </form>
+
+      {(contacts?.length ?? 0) === 0 ? (
+        <div class="empty">No contacts recorded yet. Add the sponsor's primary point of contact.</div>
+      ) : (
+        <ul class="contact-list">
+          {contacts!.map(c => (
+            <li class={c.is_primary ? 'primary' : ''}>
+              <div class="contact-head">
+                <strong>{c.full_name}</strong>
+                {c.role && <span class="dim">· {c.role}</span>}
+                {c.is_primary && <span class="badge-primary">Primary</span>}
+              </div>
+              <div class="contact-meta">
+                {c.email && <a href={`mailto:${c.email}?subject=${encodeURIComponent('Wallaroo FC — ' + anchor.full_name)}`} class="cell-link">✉ {c.email}</a>}
+                {c.phone && <a href={`tel:${c.phone}`} class="cell-link">☎ {c.phone}</a>}
+              </div>
+              {c.notes && <div class="contact-notes">{c.notes}</div>}
+              <form method="post" action="/api/admin/sponsor-crm" class="inline-delete">
+                <input type="hidden" name="action" value="delete_contact" />
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="member_id" value={anchor.id} />
+                <button type="submit" class="btn-danger-mini" onclick="return confirm('Delete this contact?')">Remove</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <!-- ── Activity log panel ────────────────────────────────────────── -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Activity Log <span class="dim">({activities?.length ?? 0})</span></h2>
+        <button type="button" class="btn-small" data-toggle="activity-form">+ Log activity</button>
+      </div>
+
+      <form id="activity-form" class="panel-form" data-form="activity" hidden>
+        <input type="hidden" name="member_id" value={anchor.id} />
+        <div class="row-2">
+          <label>Type
+            <select name="activity_type" required>
+              <option value="note">Note</option>
+              <option value="call">Phone call</option>
+              <option value="email">Email</option>
+              <option value="meeting">Meeting</option>
+              <option value="letter">Letter</option>
+              <option value="payment">Payment received</option>
+              <option value="renewal">Renewal</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label>Date<input name="activity_date" type="date" required /></label>
+        </div>
+        <label>Summary<input name="summary" required placeholder="One-line summary…" /></label>
+        <label>Contact person<input name="contact_person" placeholder="Who you spoke with" /></label>
+        <label>Details<textarea name="details" rows="3" placeholder="What was discussed / notes…"></textarea></label>
+        <div class="row-2">
+          <label>Outcome<input name="outcome" placeholder="Agreed to renew / needs follow-up / …" /></label>
+          <label>Follow-up date<input name="follow_up_date" type="date" /></label>
+        </div>
+        <div class="row-right">
+          <button type="button" class="btn-cancel" data-cancel="activity-form">Cancel</button>
+          <button type="submit" class="btn-primary">Save entry</button>
+        </div>
+      </form>
+
+      {(activities?.length ?? 0) === 0 ? (
+        <div class="empty">No activity logged yet.</div>
+      ) : (
+        <ul class="activity-list">
+          {activities!.map(a => (
+            <li>
+              <div class="activity-head">
+                <span class={`type-badge type-${a.activity_type}`}>{a.activity_type}</span>
+                <span class="activity-date">{a.activity_date}</span>
+                <strong class="activity-summary">{a.summary}</strong>
+              </div>
+              {a.contact_person && <div class="activity-meta">With: {a.contact_person}</div>}
+              {a.details && <div class="activity-details">{a.details}</div>}
+              {a.outcome && <div class="activity-outcome"><strong>Outcome:</strong> {a.outcome}</div>}
+              {a.follow_up_date && <div class="activity-followup">📅 Follow up: {a.follow_up_date}</div>}
+              <form method="post" action="/api/admin/sponsor-crm" class="inline-delete">
+                <input type="hidden" name="action" value="delete_activity" />
+                <input type="hidden" name="id" value={a.id} />
+                <input type="hidden" name="member_id" value={anchor.id} />
+                <button type="submit" class="btn-danger-mini" onclick="return confirm('Delete this activity entry?')">Remove</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </div>
+
+</AdminLayout>
+
+<style>
+  .breadcrumb { margin-bottom: 12px; font-size: 13px; }
+  .breadcrumb a { color: var(--admin-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--admin-text); }
+
+  .flash {
+    background: rgba(46,200,80,0.1);
+    border: 1px solid rgba(46,200,80,0.3);
+    color: #6EE7B7;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .sponsor-header {
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 20px;
+    border-left: 4px solid #C8102E;
+  }
+  .sponsor-tier {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--admin-muted);
+    font-family: monospace;
+  }
+  .sponsor-header h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 0.03em;
+    margin: 6px 0 14px;
+  }
+  .sponsor-contact-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+  .contact-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--admin-text);
+    text-decoration: none;
+  }
+  .contact-chip.email:hover { border-color: #C8102E; color: #C8102E; }
+  .contact-chip.missing { background: rgba(240,196,32,0.12); border-color: rgba(240,196,32,0.35); color: #F0C420; }
+
+  .followup-strip {
+    background: rgba(255,200,0,0.08);
+    border: 1px solid rgba(255,200,0,0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .followup-pill {
+    background: rgba(255,200,0,0.15);
+    padding: 3px 8px;
+    border-radius: 3px;
+    color: #F0C420;
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--admin-border);
+  }
+  .panel-head h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.05em;
+    margin: 0;
+  }
+  .dim { color: var(--admin-muted); font-size: 13px; font-weight: 400; }
+
+  .btn-small {
+    background: rgba(200,16,46,0.15);
+    border: 1px solid rgba(200,16,46,0.4);
+    color: #F0F4F8;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-small:hover { background: rgba(200,16,46,0.25); }
+
+  .panel-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; padding: 14px; background: rgba(255,255,255,0.02); border: 1px dashed var(--admin-border); border-radius: 6px; }
+  .panel-form label { display: block; font-size: 11px; color: var(--admin-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .panel-form input, .panel-form select, .panel-form textarea {
+    width: 100%;
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 13px;
+    margin-top: 4px;
+    font-family: inherit;
+  }
+  .panel-form input:focus, .panel-form select:focus, .panel-form textarea:focus { outline: none; border-color: #C8102E; }
+  .panel-form .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .panel-form .row-right { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .panel-form label.checkbox { display: flex; align-items: center; gap: 6px; text-transform: none; font-size: 12px; color: var(--admin-text); }
+  .panel-form label.checkbox input { width: auto; margin: 0; }
+
+  .btn-primary { background: #C8102E; color: #fff; border: none; padding: 8px 16px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-primary:hover { background: #a00e26; }
+  .btn-cancel { background: transparent; color: var(--admin-muted); border: 1px solid var(--admin-border); padding: 8px 16px; border-radius: 5px; font-size: 13px; cursor: pointer; }
+  .btn-cancel:hover { color: var(--admin-text); border-color: var(--admin-text); }
+
+  .empty { padding: 20px; text-align: center; color: var(--admin-muted); font-style: italic; font-size: 13px; }
+
+  .contact-list, .activity-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .contact-list li, .activity-list li {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    position: relative;
+  }
+  .contact-list li.primary { border-left: 3px solid #C8102E; }
+
+  .contact-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .contact-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+  .contact-notes { font-size: 12px; color: var(--admin-muted); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--admin-border); }
+  .badge-primary { background: rgba(200,16,46,0.2); color: #C8102E; padding: 1px 6px; border-radius: 3px; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+
+  .activity-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .activity-summary { flex: 1; font-size: 13px; }
+  .activity-date { font-family: monospace; font-size: 11px; color: var(--admin-muted); }
+  .activity-meta, .activity-details, .activity-outcome, .activity-followup { font-size: 12px; margin-top: 4px; }
+  .activity-details { color: var(--admin-muted); white-space: pre-wrap; }
+  .activity-outcome { color: var(--admin-text); }
+  .activity-followup { color: #F0C420; }
+
+  .type-badge {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+  }
+  .type-call     { background: rgba(80,180,255,0.2); color: #7DD3FC; }
+  .type-email    { background: rgba(150,120,255,0.2); color: #C4B5FD; }
+  .type-meeting  { background: rgba(255,140,80,0.2); color: #FDBA74; }
+  .type-payment  { background: rgba(46,200,80,0.2); color: #6EE7B7; }
+  .type-renewal  { background: rgba(200,16,46,0.2); color: #FCA5A5; }
+  .type-note     { background: rgba(200,200,200,0.15); color: var(--admin-text); }
+  .type-letter   { background: rgba(240,196,32,0.2); color: #F0C420; }
+  .type-other    { background: rgba(255,255,255,0.1); color: var(--admin-muted); }
+
+  .cell-link { color: var(--admin-text); text-decoration: none; }
+  .cell-link:hover { color: #C8102E; text-decoration: underline; }
+
+  .inline-delete { position: absolute; top: 10px; right: 10px; margin: 0; }
+  .btn-danger-mini {
+    background: transparent;
+    border: 1px solid var(--admin-border);
+    color: var(--admin-muted);
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .btn-danger-mini:hover { color: #C8102E; border-color: #C8102E; }
+</style>
+
+<script>
+  // Toggle add-forms + wire submits to the API
+  document.querySelectorAll('[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-toggle');
+      const form = document.getElementById(id!);
+      if (form) form.hidden = false;
+      btn.setAttribute('hidden', '');
+    });
+  });
+  document.querySelectorAll('[data-cancel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-cancel');
+      const form = document.getElementById(id!);
+      if (form) form.hidden = true;
+      const toggleBtn = document.querySelector(`[data-toggle="${id}"]`);
+      if (toggleBtn) toggleBtn.removeAttribute('hidden');
+      (form as HTMLFormElement)?.reset();
+    });
+  });
+
+  // Default activity_date to today.
+  const dateInput = document.querySelector<HTMLInputElement>('[data-form="activity"] input[name="activity_date"]');
+  if (dateInput && !dateInput.value) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Submit via fetch → reload with saved= flash
+  document.querySelectorAll<HTMLFormElement>('form[data-form]').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const kind = form.dataset.form!;
+      const fd = new FormData(form);
+      const payload: Record<string, any> = { action: kind === 'contact' ? 'add_contact' : 'add_activity' };
+      fd.forEach((v, k) => {
+        if (k === 'is_primary') payload[k] = true;
+        else payload[k] = v.toString().trim() || null;
+      });
+      const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      const res = await fetch('/api/admin/sponsor-crm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        window.location.href = `${window.location.pathname}?saved=${kind}`;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Save failed: ' + (err.error ?? res.statusText));
+        if (btn) { btn.disabled = false; btn.textContent = kind === 'contact' ? 'Save contact' : 'Save entry'; }
+      }
+    });
+  });
+</script>
