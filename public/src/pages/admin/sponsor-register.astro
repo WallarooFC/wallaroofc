@@ -1,0 +1,333 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+// ── Fetch every club_member with a sponsor-adjacent membership_type ─────────
+// We match liberally — the list has typos ("Sposnsors", "Parton", "SilverParton")
+// which get normalised into canonical tiers below.
+const { data: rawRows } = await db
+  .from('club_members')
+  .select('id, membership_number, full_name, membership_type, email, phone, postal_address')
+  .not('full_name', 'is', null)
+  .order('membership_number');
+
+const SPONSOR_KEYWORDS = ['sponsor', 'sposnsor', 'diamond', 'platinum', 'vip', 'gold', 'silver', 'bronze', 'major', 'club', 'patron', 'parton'];
+const rows = (rawRows ?? []).filter(r => {
+  const t = (r.membership_type ?? '').toLowerCase();
+  if (!t) return false;
+  // Exclude non-sponsor tiers explicitly.
+  if (t.includes('player') || t.includes('life') || t.includes('committee') || t.includes('social')) return false;
+  return SPONSOR_KEYWORDS.some(k => t.includes(k));
+});
+
+// ── Normalize membership_type into a canonical tier ────────────────────────
+type Tier = 'Major' | 'Diamond' | 'Platinum' | 'VIP' | 'Gold' | 'Silver' | 'Bronze' | 'Club';
+const TIER_ORDER: Tier[] = ['Major', 'Diamond', 'Platinum', 'VIP', 'Gold', 'Silver', 'Bronze', 'Club'];
+
+function tierOf(raw: string): Tier {
+  const t = raw.toLowerCase();
+  if (t.includes('major'))    return 'Major';
+  if (t.includes('diamond'))  return 'Diamond';
+  if (t.includes('platinum')) return 'Platinum';
+  if (t.includes('vip'))      return 'VIP';
+  if (t.includes('gold'))     return 'Gold';
+  if (t.includes('silver'))   return 'Silver';
+  // Handle both correct "bronze" and the typo'd "sposnsor" (Bronze Sposnsors).
+  if (t.includes('bronze') || t.includes('parton') || t.includes('patron')) return 'Bronze';
+  return 'Club';
+}
+
+// ── Group by (name, tier, email) — same logic as membership register ──────
+type SponsorGroup = {
+  key: string;
+  anchor_id: string;
+  tier: Tier;
+  sub_tier: string | null;   // e.g. "Diamond Level 1" vs "Diamond Level 2"
+  numbers: number[];
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  postal_address: string | null;
+};
+
+const byKey = new Map<string, SponsorGroup>();
+for (const m of rows) {
+  const name = (m.full_name ?? '').trim();
+  const tier = tierOf(m.membership_type ?? '');
+  const key = `${name.toLowerCase()}|${tier}|${(m.email ?? '').toLowerCase()}`;
+
+  const existing = byKey.get(key);
+  if (existing) {
+    existing.numbers.push(m.membership_number);
+    existing.email          ||= m.email;
+    existing.phone          ||= m.phone;
+    existing.postal_address ||= m.postal_address;
+    // Anchor on the lowest membership number in the group.
+    if (m.membership_number < Math.min(...existing.numbers.filter(n => n !== m.membership_number))) {
+      existing.anchor_id = m.id;
+    }
+  } else {
+    byKey.set(key, {
+      key,
+      anchor_id: m.id,
+      tier,
+      sub_tier: m.membership_type,
+      numbers: [m.membership_number],
+      full_name: name,
+      email: m.email,
+      phone: m.phone,
+      postal_address: m.postal_address,
+    });
+  }
+}
+
+// Sort numbers within each group, ensure anchor_id points to lowest membership_number,
+// then group by tier.
+const groups = Array.from(byKey.values()).map(g => {
+  const sorted = g.numbers.slice().sort((a, b) => a - b);
+  return { ...g, numbers: sorted };
+});
+
+// Anchor_id fix-up: re-scan the raw rows for the lowest membership_number
+// in each group and use that row's id.
+for (const g of groups) {
+  const lowest = g.numbers[0];
+  const row = rows.find(r => r.membership_number === lowest && (r.full_name ?? '').trim() === g.full_name);
+  if (row) g.anchor_id = row.id;
+}
+
+// Bucket into tiers.
+const byTier = new Map<Tier, SponsorGroup[]>();
+for (const t of TIER_ORDER) byTier.set(t, []);
+for (const g of groups) byTier.get(g.tier)!.push(g);
+for (const t of TIER_ORDER) {
+  byTier.get(t)!.sort((a, b) => a.numbers[0] - b.numbers[0]);
+}
+
+const search = (Astro.url.searchParams.get('q') ?? '').trim().toLowerCase();
+function matches(g: SponsorGroup) {
+  if (!search) return true;
+  return g.full_name.toLowerCase().includes(search)
+      || (g.email ?? '').toLowerCase().includes(search)
+      || g.numbers.join(', ').includes(search)
+      || g.tier.toLowerCase().includes(search);
+}
+
+const totalSponsors = groups.length;
+const missingEmail  = groups.filter(g => !g.email).length;
+
+// Prefetch activity counts so each row can show "3 log" badges.
+const anchorIds = groups.map(g => g.anchor_id);
+const activityCounts = new Map<string, number>();
+if (anchorIds.length) {
+  const { data: acts } = await db
+    .from('sponsor_activities')
+    .select('member_id')
+    .in('member_id', anchorIds);
+  for (const a of acts ?? []) {
+    activityCounts.set(a.member_id, (activityCounts.get(a.member_id) ?? 0) + 1);
+  }
+}
+
+const TIER_META: Record<Tier, { colour: string; blurb: string }> = {
+  Major:    { colour: '#FFD700', blurb: 'Naming-rights and cornerstone partners' },
+  Diamond:  { colour: '#B9F2FF', blurb: 'Top-tier season sponsors' },
+  Platinum: { colour: '#E5E4E2', blurb: 'Major season sponsors' },
+  VIP:      { colour: '#C8102E', blurb: 'VIP hospitality members' },
+  Gold:     { colour: '#F0C420', blurb: 'Gold sponsorship package' },
+  Silver:   { colour: '#C0C0C0', blurb: 'Silver sponsorship package' },
+  Bronze:   { colour: '#CD7F32', blurb: 'Bronze sponsors and patrons' },
+  Club:     { colour: '#8B4513', blurb: 'Club-level supporters' },
+};
+---
+<AdminLayout title="Sponsor Register">
+
+  <div class="section-label">Sponsorship Management</div>
+
+  <div class="toolbar">
+    <form method="get" class="filters">
+      <input name="q" type="search" placeholder="Search company, number, tier, email…" value={search} class="search-input" />
+      <button type="submit" class="btn-filter">Search</button>
+    </form>
+    <div class="counts">
+      <span class="count">{totalSponsors} sponsors</span>
+      {missingEmail > 0 && <span class="count warn">· {missingEmail} missing email</span>}
+    </div>
+  </div>
+
+  <div class="hint-strip">
+    Click a company name to open the sponsorship-management page (notes, contacts, activity log).
+    Click an email to compose a message from the club's mail account. Missing information is
+    highlighted in <span class="warn-swatch">yellow</span> — fill in what's missing to enable
+    the group email list.
+  </div>
+
+  {TIER_ORDER.map(tier => {
+    const list = byTier.get(tier)!.filter(matches);
+    if (list.length === 0) return null;
+    const meta = TIER_META[tier];
+    const tierEmails = list.filter(g => g.email).map(g => g.email!);
+    return (
+      <section class="tier-section">
+        <header class="tier-header">
+          <div class="tier-head-left">
+            <span class="tier-swatch" style={`background:${meta.colour}`}></span>
+            <div>
+              <h2>{tier} Sponsors <span class="tier-count">({list.length})</span></h2>
+              <div class="tier-blurb">{meta.blurb}</div>
+            </div>
+          </div>
+          {tierEmails.length > 0 && (
+            <a
+              class="btn-group-email"
+              href={`mailto:?bcc=${tierEmails.join(',')}&subject=${encodeURIComponent(`Wallaroo FC — ${tier} Sponsors`)}`}
+              title={`Draft a BCC email to all ${list.filter(g => g.email).length} ${tier} sponsors with an email address`}
+            >📧 Email {tierEmails.length} sponsor{tierEmails.length === 1 ? '' : 's'}</a>
+          )}
+        </header>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-num">#</th>
+              <th>Company / Sponsor</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Postal address</th>
+              <th class="col-log">Activity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(g => {
+              const missingE = !g.email;
+              const missingP = !g.phone;
+              const missingA = !g.postal_address;
+              const logCount = activityCounts.get(g.anchor_id) ?? 0;
+              return (
+                <tr>
+                  <td class="col-num">{g.numbers.join(', ')}</td>
+                  <td>
+                    <a href={`/admin/sponsor-register/${g.anchor_id}`} class="sponsor-link">{g.full_name}</a>
+                    {g.sub_tier && g.sub_tier !== tier && <span class="sub-tier">({g.sub_tier})</span>}
+                  </td>
+                  <td class={missingE ? 'missing' : ''}>
+                    {g.email
+                      ? <a href={`mailto:${g.email}?subject=${encodeURIComponent('Wallaroo FC — ' + g.full_name)}`} class="cell-link">{g.email}</a>
+                      : <span class="mute">— missing —</span>}
+                  </td>
+                  <td class={missingP ? 'missing' : ''}>
+                    {g.phone ?? <span class="mute">— missing —</span>}
+                  </td>
+                  <td class={`col-addr ${missingA ? 'missing' : ''}`}>
+                    {g.postal_address ?? <span class="mute">— missing —</span>}
+                  </td>
+                  <td class="col-log">
+                    {logCount > 0
+                      ? <span class="log-badge">{logCount} entr{logCount === 1 ? 'y' : 'ies'}</span>
+                      : <span class="mute-small">no entries</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    );
+  })}
+
+</AdminLayout>
+
+<style>
+  .section-label { font-family: var(--headline, sans-serif); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--admin-muted); margin: 24px 0 12px; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .filters { display: flex; gap: 8px; flex: 1; min-width: 260px; }
+  .search-input { flex: 1; min-width: 200px; background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  .search-input:focus { outline: none; border-color: #C8102E; }
+  .btn-filter { background: #C8102E; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-filter:hover { background: #a00e26; }
+  .counts { font-size: 12px; color: var(--admin-muted); display: flex; gap: 8px; }
+  .count { white-space: nowrap; }
+  .count.warn { color: #F0C420; }
+
+  .hint-strip {
+    background: rgba(200,16,46,0.06);
+    border: 1px solid rgba(200,16,46,0.18);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--admin-muted);
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+  .warn-swatch {
+    display: inline-block;
+    background: rgba(240,196,32,0.35);
+    color: #F0C420;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tier-section { margin-bottom: 32px; }
+  .tier-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--admin-border);
+  }
+  .tier-head-left { display: flex; align-items: center; gap: 12px; }
+  .tier-swatch { width: 22px; height: 22px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
+  .tier-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 0.05em; margin: 0; }
+  .tier-count { color: var(--admin-muted); font-size: 14px; font-weight: 400; }
+  .tier-blurb { font-size: 11px; color: var(--admin-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+  .btn-group-email {
+    background: rgba(200,16,46,0.15);
+    border: 1px solid rgba(200,16,46,0.4);
+    color: #F0F4F8;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-group-email:hover { background: rgba(200,16,46,0.25); }
+
+  .data-table { width: 100%; border-collapse: collapse; background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 6px; overflow: hidden; }
+  .data-table th, .data-table td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--admin-border); vertical-align: top; }
+  .data-table th { background: rgba(255,255,255,0.03); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: var(--admin-muted); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover { background: rgba(200,16,46,0.04); }
+  .col-num { text-align: right; min-width: 60px; font-family: monospace; color: var(--admin-muted); white-space: nowrap; }
+  .col-addr { max-width: 260px; }
+  .col-log { text-align: center; width: 100px; }
+
+  .sponsor-link { color: var(--admin-text); text-decoration: none; font-weight: 600; border-bottom: 1px dashed rgba(200,16,46,0.4); }
+  .sponsor-link:hover { color: #C8102E; border-bottom-color: #C8102E; }
+  .sub-tier { color: var(--admin-muted); font-size: 11px; margin-left: 6px; }
+
+  .cell-link { color: var(--admin-text); text-decoration: none; }
+  .cell-link:hover { color: #C8102E; text-decoration: underline; }
+
+  .missing {
+    background: rgba(240,196,32,0.15);
+    box-shadow: inset 0 0 0 1px rgba(240,196,32,0.35);
+  }
+  .missing .mute { color: #F0C420; font-weight: 600; }
+
+  .mute { color: var(--admin-muted); font-style: italic; }
+  .mute-small { color: var(--admin-muted); font-size: 11px; }
+
+  .log-badge {
+    background: rgba(200,16,46,0.15);
+    color: #F0F4F8;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+</style>
