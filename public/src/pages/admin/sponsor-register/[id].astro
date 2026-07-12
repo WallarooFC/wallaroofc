@@ -221,6 +221,8 @@ const savedFlash = Astro.url.searchParams.get('saved');
               <option value="email">Email</option>
               <option value="meeting">Meeting</option>
               <option value="letter">Letter</option>
+              <option value="package_sent">Sponsor package sent</option>
+              <option value="invoice_sent">Invoice sent</option>
               <option value="payment">Payment received</option>
               <option value="renewal">Renewal</option>
               <option value="other">Other</option>
@@ -248,7 +250,7 @@ const savedFlash = Astro.url.searchParams.get('saved');
           {activities!.map(a => (
             <li>
               <div class="activity-head">
-                <span class={`type-badge type-${a.activity_type}`}>{a.activity_type}</span>
+                <span class={`type-badge type-${a.activity_type}`}>{a.activity_type.replace(/_/g, ' ')}</span>
                 <span class="activity-date">{a.activity_date}</span>
                 <strong class="activity-summary">{a.summary}</strong>
               </div>
@@ -499,14 +501,16 @@ const savedFlash = Astro.url.searchParams.get('saved');
     border-radius: 3px;
     background: rgba(255,255,255,0.1);
   }
-  .type-call     { background: rgba(80,180,255,0.2); color: #7DD3FC; }
-  .type-email    { background: rgba(150,120,255,0.2); color: #C4B5FD; }
-  .type-meeting  { background: rgba(255,140,80,0.2); color: #FDBA74; }
-  .type-payment  { background: rgba(46,200,80,0.2); color: #6EE7B7; }
-  .type-renewal  { background: rgba(200,16,46,0.2); color: #FCA5A5; }
-  .type-note     { background: rgba(200,200,200,0.15); color: var(--admin-text); }
-  .type-letter   { background: rgba(240,196,32,0.2); color: #F0C420; }
-  .type-other    { background: rgba(255,255,255,0.1); color: var(--admin-muted); }
+  .type-call         { background: rgba(80,180,255,0.2); color: #7DD3FC; }
+  .type-email        { background: rgba(150,120,255,0.2); color: #C4B5FD; }
+  .type-meeting      { background: rgba(255,140,80,0.2); color: #FDBA74; }
+  .type-payment      { background: rgba(46,200,80,0.2); color: #6EE7B7; }
+  .type-renewal      { background: rgba(200,16,46,0.2); color: #FCA5A5; }
+  .type-note         { background: rgba(200,200,200,0.15); color: var(--admin-text); }
+  .type-letter       { background: rgba(240,196,32,0.2); color: #F0C420; }
+  .type-package_sent { background: rgba(70,200,180,0.2); color: #5EEAD4; }
+  .type-invoice_sent { background: rgba(255,120,180,0.18); color: #F9A8D4; }
+  .type-other        { background: rgba(255,255,255,0.1); color: var(--admin-muted); }
 
   .cell-link { color: var(--admin-text); text-decoration: none; }
   .cell-link:hover { color: #C8102E; text-decoration: underline; }
