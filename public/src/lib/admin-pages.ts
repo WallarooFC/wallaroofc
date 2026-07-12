@@ -15,6 +15,8 @@ export const ADMIN_PAGES = [
   { key: 'gallery',        label: 'Gallery',              icon: '🖼' },
   { key: 'config',         label: 'Site Settings',        icon: '⚙' },
   { key: 'secretary',      label: 'Secretary Tools',      icon: '📁' },
+  { key: 'membership',     label: 'Club Membership',      icon: '🎫' },
+  { key: 'meal-vouchers',  label: 'Meal Vouchers',        icon: '🍽' },
   { key: 'members',        label: 'Committee Members',    icon: '👤' },
 ] as const;
 

@@ -1,0 +1,108 @@
+---
+export const prerender = false;
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+
+const db = getAdminClient();
+
+const search = (Astro.url.searchParams.get('q') ?? '').trim();
+const typeFilter = Astro.url.searchParams.get('type') ?? 'all';
+
+const { data: rows } = await db
+  .from('club_members')
+  .select('id, membership_number, full_name, membership_type, email, phone, postal_address')
+  .order('membership_number');
+
+const members = rows ?? [];
+
+// Distinct membership types for the filter dropdown
+const types = Array.from(new Set(members.map((m: any) => m.membership_type).filter(Boolean))).sort();
+
+const filtered = members.filter((m: any) => {
+  const q = search.toLowerCase();
+  const matchSearch = !q
+    || String(m.membership_number).includes(q)
+    || (m.full_name ?? '').toLowerCase().includes(q)
+    || (m.email ?? '').toLowerCase().includes(q);
+  const matchType = typeFilter === 'all' || m.membership_type === typeFilter;
+  return matchSearch && matchType;
+});
+
+const withDetails = members.filter((m: any) => m.full_name).length;
+---
+<AdminLayout title="Club Membership">
+
+  <div class="section-label">Membership Register</div>
+
+  <div class="toolbar">
+    <form method="get" class="filters">
+      <input name="q" type="search" placeholder="Search number, name, email…" value={search} class="search-input" />
+      <select name="type" class="grade-select" onchange="this.form.submit()">
+        <option value="all">All types</option>
+        {types.map((t: any) => <option value={t} selected={typeFilter === t}>{t}</option>)}
+      </select>
+      <button type="submit" class="btn-filter">Filter</button>
+    </form>
+    <div class="counts">
+      <span class="count">{members.length} slots · {withDetails} allocated · {filtered.length} shown</span>
+    </div>
+  </div>
+
+  {filtered.length === 0 ? (
+    <div class="empty-section">No members match those filters.</div>
+  ) : (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="col-num">#</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Postal address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filtered.map((m: any) => (
+          <tr class={m.full_name ? '' : 'row-empty'}>
+            <td class="col-num">{m.membership_number}</td>
+            <td>{m.full_name ?? <span class="mute">— vacant —</span>}</td>
+            <td>{m.membership_type ?? ''}</td>
+            <td><a href={m.email ? `mailto:${m.email}` : '#'} class="cell-link">{m.email ?? ''}</a></td>
+            <td>{m.phone ?? ''}</td>
+            <td class="col-addr">{m.postal_address ?? ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+
+</AdminLayout>
+
+<style>
+  .section-label { font-family: var(--headline, sans-serif); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--admin-muted); margin: 24px 0 12px; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+  .filters { display: flex; gap: 8px; flex: 1; min-width: 260px; }
+  .search-input { flex: 1; min-width: 160px; background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  .search-input:focus { outline: none; border-color: #C8102E; }
+  .grade-select { background: var(--admin-card); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
+  .btn-filter { background: #C8102E; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-filter:hover { background: #a00e26; }
+  .counts { font-size: 12px; color: var(--admin-muted); }
+  .count { white-space: nowrap; }
+
+  .empty-section { padding: 24px; text-align: center; color: var(--admin-muted); background: var(--admin-card); border: 1px dashed var(--admin-border); border-radius: 6px; }
+
+  .data-table { width: 100%; border-collapse: collapse; background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 6px; overflow: hidden; }
+  .data-table th, .data-table td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--admin-border); }
+  .data-table th { background: rgba(255,255,255,0.03); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: var(--admin-muted); }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover { background: rgba(200,16,46,0.04); }
+  .col-num { text-align: right; width: 60px; font-family: monospace; color: var(--admin-muted); }
+  .col-addr { max-width: 280px; }
+  .row-empty td { opacity: 0.4; }
+  .mute { color: var(--admin-muted); font-style: italic; }
+  .cell-link { color: var(--admin-text); text-decoration: none; }
+  .cell-link:hover { color: #C8102E; text-decoration: underline; }
+</style>
