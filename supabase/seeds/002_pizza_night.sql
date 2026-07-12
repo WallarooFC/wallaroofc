@@ -70,7 +70,10 @@ with lt as (
       'Junior fundraiser at the clubrooms. 9-inch wood-fired pizzas, $15 each — Margherita, Pepperoni, The Special, Ham & Cheese. Sides + schnitzels also on. Orders from 5:30pm.',
       'ctaLabel', 'See the menu',
       'ctaUrl', 'https://wallaroofc.com/pizza-night',
-      'imageUrl', 'https://wallaroofc.com/takeover/pizza-night.png'
+      'imageUrl', 'https://wallaroofc.com/takeover/pizza-night.png',
+      'scale', 2,
+      'rotate', true,
+      'rotateDeg', 20
     )
   )
   returning id
