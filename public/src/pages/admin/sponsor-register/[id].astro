@@ -37,14 +37,18 @@ const { data: siblings } = await db
   .select('id, membership_number, membership_type, email')
   .eq('full_name', anchor.full_name);
 
-const siblingNumbers = (siblings ?? [])
+const siblingRows = (siblings ?? [])
   .filter(s => {
     if ((s.email ?? '') !== (anchor.email ?? '')) return false;
     const st = (s.membership_type ?? '').toLowerCase();
     return family.some(f => st.includes(f));
   })
-  .map(s => s.membership_number)
-  .sort((a, b) => a - b);
+  .sort((a, b) => a.membership_number - b.membership_number);
+
+const siblingNumbers = siblingRows.map(s => s.membership_number);
+const siblingIds     = siblingRows.map(s => s.id);
+
+const canEdit = Astro.locals.canEdit ?? false;
 
 // ── Load contacts + activity log ───────────────────────────────────────────
 const { data: contacts } = await db
@@ -74,7 +78,12 @@ const savedFlash = Astro.url.searchParams.get('saved');
   </div>
 
   {savedFlash && (
-    <div class="flash">✓ {savedFlash === 'contact' ? 'Contact saved.' : savedFlash === 'activity' ? 'Activity logged.' : 'Saved.'}</div>
+    <div class="flash">✓ {
+      savedFlash === 'contact'  ? 'Contact saved.' :
+      savedFlash === 'activity' ? 'Activity logged.' :
+      savedFlash === 'details'  ? 'Sponsor details updated across all membership numbers.' :
+      'Saved.'
+    }</div>
   )}
 
   <div class="sponsor-header">
@@ -91,7 +100,46 @@ const savedFlash = Astro.url.searchParams.get('saved');
         {anchor.postal_address && <span class="contact-chip">✉ {anchor.postal_address}</span>}
       </div>
     </div>
+    {canEdit && (
+      <button type="button" class="btn-edit-details" data-toggle="details-form">✎ Edit details</button>
+    )}
   </div>
+
+  {canEdit && (
+    <form id="details-form" class="details-form" data-form="details" hidden>
+      <input type="hidden" name="member_id"   value={anchor.id} />
+      <input type="hidden" name="sibling_ids" value={siblingIds.join(',')} />
+      <div class="details-form-title">Edit sponsor details</div>
+      <div class="details-form-hint">
+        Changes apply to all {siblingIds.length} membership number{siblingIds.length === 1 ? '' : 's'}
+        held by this sponsor (#{siblingNumbers.join(', ')}). A note is logged automatically to the
+        activity log for auditability.
+      </div>
+      <label>Sponsor / company name
+        <input name="full_name" required value={anchor.full_name} />
+      </label>
+      <div class="row-2">
+        <label>Membership type
+          <input name="membership_type" value={anchor.membership_type ?? ''} />
+        </label>
+        <label>Email
+          <input name="email" type="email" value={anchor.email ?? ''} />
+        </label>
+      </div>
+      <div class="row-2">
+        <label>Phone
+          <input name="phone" value={anchor.phone ?? ''} />
+        </label>
+        <label>Postal address
+          <input name="postal_address" value={anchor.postal_address ?? ''} />
+        </label>
+      </div>
+      <div class="row-right">
+        <button type="button" class="btn-cancel" data-cancel="details-form">Cancel</button>
+        <button type="submit" class="btn-primary">Save changes</button>
+      </div>
+    </form>
+  )}
 
   {openFollowUps.length > 0 && (
     <div class="followup-strip">
@@ -173,6 +221,8 @@ const savedFlash = Astro.url.searchParams.get('saved');
               <option value="email">Email</option>
               <option value="meeting">Meeting</option>
               <option value="letter">Letter</option>
+              <option value="package_sent">Sponsor Package Sent</option>
+              <option value="invoice_sent">Invoice Sent</option>
               <option value="payment">Payment received</option>
               <option value="renewal">Renewal</option>
               <option value="other">Other</option>
@@ -200,7 +250,7 @@ const savedFlash = Astro.url.searchParams.get('saved');
           {activities!.map(a => (
             <li>
               <div class="activity-head">
-                <span class={`type-badge type-${a.activity_type}`}>{a.activity_type}</span>
+                <span class={`type-badge type-${a.activity_type}`}>{a.activity_type.replace(/_/g, ' ')}</span>
                 <span class="activity-date">{a.activity_date}</span>
                 <strong class="activity-summary">{a.summary}</strong>
               </div>
@@ -245,7 +295,72 @@ const savedFlash = Astro.url.searchParams.get('saved');
     padding: 24px;
     margin-bottom: 20px;
     border-left: 4px solid #C8102E;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
   }
+  .sponsor-header-main { flex: 1; min-width: 0; }
+  .btn-edit-details {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn-edit-details:hover { border-color: #C8102E; color: #C8102E; }
+
+  .details-form {
+    background: var(--admin-card);
+    border: 1px solid #C8102E;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .details-form-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.05em;
+    color: #C8102E;
+  }
+  .details-form-hint {
+    font-size: 11px;
+    color: var(--admin-muted);
+    line-height: 1.5;
+    background: rgba(200,16,46,0.06);
+    padding: 8px 10px;
+    border-radius: 4px;
+    border-left: 2px solid #C8102E;
+  }
+  .details-form label {
+    display: block;
+    font-size: 11px;
+    color: var(--admin-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .details-form input {
+    width: 100%;
+    background: var(--admin-bg);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 14px;
+    margin-top: 4px;
+    font-family: inherit;
+  }
+  .details-form input:focus { outline: none; border-color: #C8102E; }
+  .details-form .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .details-form .row-right { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
   .sponsor-tier {
     font-size: 11px;
     letter-spacing: 0.12em;
@@ -386,14 +501,16 @@ const savedFlash = Astro.url.searchParams.get('saved');
     border-radius: 3px;
     background: rgba(255,255,255,0.1);
   }
-  .type-call     { background: rgba(80,180,255,0.2); color: #7DD3FC; }
-  .type-email    { background: rgba(150,120,255,0.2); color: #C4B5FD; }
-  .type-meeting  { background: rgba(255,140,80,0.2); color: #FDBA74; }
-  .type-payment  { background: rgba(46,200,80,0.2); color: #6EE7B7; }
-  .type-renewal  { background: rgba(200,16,46,0.2); color: #FCA5A5; }
-  .type-note     { background: rgba(200,200,200,0.15); color: var(--admin-text); }
-  .type-letter   { background: rgba(240,196,32,0.2); color: #F0C420; }
-  .type-other    { background: rgba(255,255,255,0.1); color: var(--admin-muted); }
+  .type-call         { background: rgba(80,180,255,0.2); color: #7DD3FC; }
+  .type-email        { background: rgba(150,120,255,0.2); color: #C4B5FD; }
+  .type-meeting      { background: rgba(255,140,80,0.2); color: #FDBA74; }
+  .type-payment      { background: rgba(46,200,80,0.2); color: #6EE7B7; }
+  .type-renewal      { background: rgba(200,16,46,0.2); color: #FCA5A5; }
+  .type-note         { background: rgba(200,200,200,0.15); color: var(--admin-text); }
+  .type-letter       { background: rgba(240,196,32,0.2); color: #F0C420; }
+  .type-package_sent { background: rgba(70,200,180,0.2); color: #5EEAD4; }
+  .type-invoice_sent { background: rgba(255,120,180,0.18); color: #F9A8D4; }
+  .type-other        { background: rgba(255,255,255,0.1); color: var(--admin-muted); }
 
   .cell-link { color: var(--admin-text); text-decoration: none; }
   .cell-link:hover { color: #C8102E; text-decoration: underline; }
@@ -445,14 +562,26 @@ const savedFlash = Astro.url.searchParams.get('saved');
   }
 
   // Submit via fetch → reload with saved= flash
+  const ACTION_BY_KIND: Record<string, string> = {
+    contact:  'add_contact',
+    activity: 'add_activity',
+    details:  'update_sponsor_details',
+  };
+  const LABEL_BY_KIND: Record<string, string> = {
+    contact:  'Save contact',
+    activity: 'Save entry',
+    details:  'Save changes',
+  };
+
   document.querySelectorAll<HTMLFormElement>('form[data-form]').forEach(form => {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const kind = form.dataset.form!;
       const fd = new FormData(form);
-      const payload: Record<string, any> = { action: kind === 'contact' ? 'add_contact' : 'add_activity' };
+      const payload: Record<string, any> = { action: ACTION_BY_KIND[kind] };
       fd.forEach((v, k) => {
         if (k === 'is_primary') payload[k] = true;
+        else if (k === 'sibling_ids') payload[k] = v.toString().split(',').filter(Boolean);
         else payload[k] = v.toString().trim() || null;
       });
       const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -467,7 +596,7 @@ const savedFlash = Astro.url.searchParams.get('saved');
       } else {
         const err = await res.json().catch(() => ({}));
         alert('Save failed: ' + (err.error ?? res.statusText));
-        if (btn) { btn.disabled = false; btn.textContent = kind === 'contact' ? 'Save contact' : 'Save entry'; }
+        if (btn) { btn.disabled = false; btn.textContent = LABEL_BY_KIND[kind]; }
       }
     });
   });
