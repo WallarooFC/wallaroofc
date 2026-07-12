@@ -88,9 +88,7 @@ const savedFlash = Astro.url.searchParams.get('saved');
         {anchor.phone
           ? <a class="contact-chip" href={`tel:${anchor.phone}`}>☎ {anchor.phone}</a>
           : <span class="contact-chip missing">☎ phone missing</span>}
-        {anchor.postal_address
-          ? <span class="contact-chip">✉ {anchor.postal_address}</span>
-          : <span class="contact-chip missing">✉ postal address missing</span>}
+        {anchor.postal_address && <span class="contact-chip">✉ {anchor.postal_address}</span>}
       </div>
     </div>
   </div>

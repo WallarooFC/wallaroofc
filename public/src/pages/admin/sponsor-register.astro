@@ -160,9 +160,9 @@ const TIER_META: Record<Tier, { colour: string; blurb: string }> = {
 
   <div class="hint-strip">
     Click a company name to open the sponsorship-management page (notes, contacts, activity log).
-    Click an email to compose a message from the club's mail account. Missing information is
-    highlighted in <span class="warn-swatch">yellow</span> — fill in what's missing to enable
-    the group email list.
+    Click an email to compose a message from the club's mail account. Missing email or phone is
+    highlighted in <span class="warn-swatch">yellow</span> — fill these in to enable the tier
+    group email lists.
   </div>
 
   {TIER_ORDER.map(tier => {
@@ -204,7 +204,6 @@ const TIER_META: Record<Tier, { colour: string; blurb: string }> = {
             {list.map(g => {
               const missingE = !g.email;
               const missingP = !g.phone;
-              const missingA = !g.postal_address;
               const logCount = activityCounts.get(g.anchor_id) ?? 0;
               return (
                 <tr>
@@ -221,8 +220,8 @@ const TIER_META: Record<Tier, { colour: string; blurb: string }> = {
                   <td class={missingP ? 'missing' : ''}>
                     {g.phone ?? <span class="mute">— missing —</span>}
                   </td>
-                  <td class={`col-addr ${missingA ? 'missing' : ''}`}>
-                    {g.postal_address ?? <span class="mute">— missing —</span>}
+                  <td class="col-addr">
+                    {g.postal_address ?? <span class="mute-small">—</span>}
                   </td>
                   <td class="col-log">
                     {logCount > 0
