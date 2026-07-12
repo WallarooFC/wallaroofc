@@ -58,10 +58,9 @@ const navItems = [
       <span>Register 2026</span>
       <span class="arrow" aria-hidden="true">→</span>
     </a>
-    <a href="https://tajjpi.com.au" class="built-by" target="_blank" rel="noopener noreferrer" aria-label="Website by TAJJPI">
+    <a href="https://www.tajjpi.com.au" class="built-by" target="_blank" rel="noopener noreferrer" aria-label="Website by TAJJPI">
       <span class="built-by-label">Website by</span>
-      <span class="built-by-name">TAJJPI</span>
-      <span class="built-by-url">tajjpi.com.au</span>
+      <img class="built-by-logo" src="/tajjpi/logo.png" alt="TAJJPI" width="120" height="72" loading="lazy" decoding="async" />
     </a>
   </div>
 </header>
@@ -118,11 +117,10 @@ const navItems = [
   .header-cta .arrow { position: relative; z-index: 1; transition: transform 0.3s; }
   .header-cta:hover .arrow { transform: translateX(4px); }
 
-  .built-by { display: flex; flex-direction: column; align-items: center; gap: 1px; text-decoration: none; border-left: 1px solid var(--line); padding-left: 32px; margin-left: 8px; transition: opacity 0.2s; }
+  .built-by { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; border-left: 1px solid var(--line); padding-left: 32px; margin-left: 8px; transition: opacity 0.2s; }
   .built-by:hover { opacity: 0.7; }
   .built-by-label { font-family: var(--headline); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--grey); }
-  .built-by-name { font-family: var(--display); font-size: 16px; letter-spacing: 0.06em; color: var(--blue-deep); text-transform: uppercase; }
-  .built-by-url { font-family: var(--headline); font-size: 9px; letter-spacing: 0.12em; text-transform: lowercase; color: var(--grey); }
+  .built-by-logo { display: block; width: auto; height: 44px; max-width: 120px; object-fit: contain; }
 
   @media (max-width: 768px) {
     nav.primary { display: none; }
