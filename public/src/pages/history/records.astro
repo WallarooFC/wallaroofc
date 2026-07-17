@@ -1,0 +1,632 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { YPFL_LADDERS, OTHER_GRADE_PREMIERSHIPS, SANFL_PLAYERS, WALLAROO_MAIL_MEDALS } from '../../lib/historical-records.ts';
+
+// ── Compute Wallaroo A-Grade highlight years ──────────────────────────
+const WALLAROO_FLAGS = YPFL_LADDERS
+  .filter(l => l.positions[0]?.toLowerCase().includes('wallaroo'))
+  .map(l => l.year);
+
+// ── Best & runner-up finishes for Wallaroo, year-by-year ──────────────
+const wallarooFinishes = YPFL_LADDERS.map(l => {
+  const idx = l.positions.findIndex(p => p.toLowerCase().includes('wall'));
+  return { year: l.year, position: idx >= 0 ? idx + 1 : null };
+});
+
+// ── Aggregate: how many Wallaroo finishes at top-4? ───────────────────
+const topFourCount = wallarooFinishes.filter(f => f.position !== null && f.position <= 4).length;
+const grandFinalCount = wallarooFinishes.filter(f => f.position === 1 || f.position === 2).length;
+
+// ── Wallaroo other-grade premierships ─────────────────────────────────
+const wallarooOtherGrades = OTHER_GRADE_PREMIERSHIPS.filter(r =>
+  r.b_grade.toLowerCase().includes('wallaroo') ||
+  r.senior_colts.toLowerCase().includes('wallaroo') ||
+  r.junior_colts.toLowerCase().includes('wallaroo')
+);
+
+// ── SANFL alphabetical, grouped by first letter ──────────────────────
+type SanflBucket = { letter: string; rows: typeof SANFL_PLAYERS };
+const sanflByLetter: SanflBucket[] = [];
+for (const p of SANFL_PLAYERS.slice().sort((a, b) => a.surname.localeCompare(b.surname))) {
+  const l = (p.surname.charAt(0) || '?').toUpperCase();
+  let last = sanflByLetter[sanflByLetter.length - 1];
+  if (!last || last.letter !== l) {
+    last = { letter: l, rows: [] };
+    sanflByLetter.push(last);
+  }
+  last.rows.push(p);
+}
+
+// Mail medals grouped by grade
+type MedalBucket = { grade: string; rows: typeof WALLAROO_MAIL_MEDALS };
+const grades = ['A Grade', 'B Grade', 'Senior Colts', 'Junior Colts', 'Goalkicking'];
+const medalsByGrade: MedalBucket[] = grades.map(g => ({
+  grade: g,
+  rows: WALLAROO_MAIL_MEDALS.filter(m => m.grade === g).sort((a, b) => a.year - b.year),
+})).filter(b => b.rows.length > 0);
+---
+<PageLayout
+  title="Historical Records 1888–2008 · Wallaroo FC"
+  description="The Wallaroo Football Club Historical Records archive — 120 years of match results, ladders, best players, goalkickers, finals results, mail medallists and Bulldogs who went on to the SANFL. Transcribed from newspaper archives, preserved by hand."
+>
+  <PageHero
+    eyebrow="Historical Records"
+    title="One hundred and twenty years,"
+    titleItalic="hand-written by the Historian."
+    intro="From the first Yorke Peninsula Football Association season in 1888 through to the 2008 YPFL. Match results, ladders, best players, goalkickers, mail medallists — and every Bulldog who went on to play SANFL. Transcribed from the newspaper archive."
+  />
+
+  <!-- Overview stats -->
+  <section class="overview">
+    <div class="container wide">
+      <div class="eyebrow">The Archive</div>
+      <h2>Kept by hand,<span class="ital"> preserved for the club.</span></h2>
+      <p class="lede">
+        The Historical Records book is 122 pages of the club's story, painstakingly copied from
+        newspaper archives by a Wallaroo club person years ago, and now digitised for
+        preservation. Every match, every ladder position, every best-and-fairest, every leading
+        goalkicker from 1888 to 2008.
+      </p>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-n">120</span>
+          <span class="stat-l">Years of records</span>
+          <span class="stat-sub">1888 – 2008</span>
+        </div>
+        <div class="stat highlight">
+          <span class="stat-n">{WALLAROO_FLAGS.length}</span>
+          <span class="stat-l">YPFL A Grade Flags</span>
+          <span class="stat-sub">since 1961 (archive era)</span>
+        </div>
+        <div class="stat">
+          <span class="stat-n">{grandFinalCount}</span>
+          <span class="stat-l">Grand Finals</span>
+          <span class="stat-sub">of {YPFL_LADDERS.length} seasons on record</span>
+        </div>
+        <div class="stat">
+          <span class="stat-n">{SANFL_PLAYERS.length}</span>
+          <span class="stat-l">Bulldogs to SANFL</span>
+          <span class="stat-sub">and beyond — WAFL · VFL · AFL</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- YPFL A Grade sequence -->
+  <section class="ypfl">
+    <div class="container wide">
+      <div class="eyebrow">A Grade Premiership Sequence</div>
+      <h2>Every YPFL A Grade flag,<span class="ital"> 1961 – 2008.</span></h2>
+      <p class="lede">
+        The final ladder at the end of every YPFL A Grade season on record.
+        Wallaroo premiership years are highlighted in club red.
+      </p>
+      <div class="table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th class="year-col">Year</th>
+              <th class="prem-col">Premier</th>
+              <th class="runner-col">Runner-Up</th>
+              <th>3rd</th>
+              <th>4th</th>
+              <th class="wall-col">Wallaroo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {YPFL_LADDERS.map(l => {
+              const isWall = l.positions[0]?.toLowerCase().includes('wallaroo');
+              const wallIdx = l.positions.findIndex(p => p.toLowerCase().includes('wall'));
+              return (
+                <tr class={isWall ? 'flag-year' : ''}>
+                  <td class="year-cell">{l.year}{isWall ? ' ★' : ''}</td>
+                  <td class={isWall ? 'prem-wallaroo' : 'prem'}>{l.positions[0]}</td>
+                  <td>{l.positions[1] ?? '—'}</td>
+                  <td>{l.positions[2] ?? '—'}</td>
+                  <td>{l.positions[3] ?? '—'}</td>
+                  <td class="wall-col">
+                    {wallIdx >= 0
+                      ? <span class={`wall-pill wall-pos-${Math.min(wallIdx + 1, 9)}`}>{wallIdx + 1}{wallIdx + 1 === 1 ? 'st' : wallIdx + 1 === 2 ? 'nd' : wallIdx + 1 === 3 ? 'rd' : 'th'}</span>
+                      : <span class="wall-absent">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div class="ypfl-note">
+        Positions transcribed from the historian's final-ladder tables.
+        Team abbreviations preserved as recorded in the book — see the source PDF below for context.
+      </div>
+    </div>
+  </section>
+
+  <!-- Other Grade premierships -->
+  <section class="grades alt">
+    <div class="container wide">
+      <div class="eyebrow">Other Grades</div>
+      <h2>B Grade, Senior Colts,<span class="ital"> Junior Colts.</span></h2>
+      <p class="lede">The full YPFL premiership sequence across the supporting grades, 1961 to 2008. Wallaroo wins highlighted.</p>
+      <div class="table-wrap">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th class="year-col">Year</th>
+              <th>B Grade</th>
+              <th>Senior Colts</th>
+              <th>Junior Colts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OTHER_GRADE_PREMIERSHIPS.map(r => {
+              const wB = r.b_grade.toLowerCase().includes('wallaroo');
+              const wS = r.senior_colts.toLowerCase().includes('wallaroo');
+              const wJ = r.junior_colts.toLowerCase().includes('wallaroo');
+              const anyWall = wB || wS || wJ;
+              return (
+                <tr class={anyWall ? 'flag-year' : ''}>
+                  <td class="year-cell">{r.year}</td>
+                  <td class={wB ? 'prem-wallaroo' : ''}>{r.b_grade || '—'}</td>
+                  <td class={wS ? 'prem-wallaroo' : ''}>{r.senior_colts || '—'}</td>
+                  <td class={wJ ? 'prem-wallaroo' : ''}>{r.junior_colts || '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Wallaroo Mail Medals -->
+  <section class="medals">
+    <div class="container wide">
+      <div class="eyebrow">Mail Medallists</div>
+      <h2>Bulldog winners<span class="ital"> of the YPFL Mail Medal.</span></h2>
+      <p class="lede">
+        Every Wallaroo winner of the YPFL Mail Medal recorded in the archive, across all grades.
+        Includes the six-year Geoff "Jessie" James goalkicking streak — 594 goals across 1995-1999.
+      </p>
+      <div class="medals-grid">
+        {medalsByGrade.map(b => (
+          <div class="medal-col">
+            <h3>{b.grade}</h3>
+            <ul class="medal-list">
+              {b.rows.map(m => (
+                <li>
+                  <span class="medal-year">{m.year}</span>
+                  <span class="medal-name">{m.name}</span>
+                  {m.detail && <span class="medal-detail">{m.detail}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- SANFL players -->
+  <section class="sanfl alt">
+    <div class="container wide">
+      <div class="eyebrow">The Bulldog Legacy</div>
+      <h2>Wallaroo to<span class="ital"> the big time.</span></h2>
+      <p class="lede">
+        {SANFL_PLAYERS.length} Bulldogs who went on to play SANFL, WAFL, VFL or AFL. Recorded club, era, games and goals as preserved in the archive.
+        Adam Goodes (Sydney Swans premierships, dual Brownlow) is on this list. So is Reg Conole — 1927 Magarey Medallist and 1928 Ports premiership player.
+      </p>
+      <div class="letter-strip">
+        {sanflByLetter.map(b => (
+          <a href={`#sanfl-${b.letter}`} class="letter-jump">{b.letter}</a>
+        ))}
+      </div>
+      {sanflByLetter.map(b => (
+        <div class="sanfl-block" id={`sanfl-${b.letter}`}>
+          <h3 class="sanfl-letter">{b.letter}</h3>
+          <ul class="sanfl-list">
+            {b.rows.map(p => (
+              <li class="sanfl-row">
+                <div class="sanfl-name">
+                  <strong>{p.surname}, {p.given}</strong>
+                </div>
+                <div class="sanfl-clubs">{p.clubs}</div>
+                {p.note && <div class="sanfl-note">★ {p.note}</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- The original archive -->
+  <section class="archive">
+    <div class="container wide">
+      <div class="eyebrow">The Original</div>
+      <h2>The book itself.</h2>
+      <p class="lede">
+        A hundred and twenty-two pages of handwriting, colour-coded in red, blue and black
+        ballpoint, spiral-bound and preserved. Every entry above was transcribed from these
+        pages. The full artifact is embedded below and available for download.
+      </p>
+      <div class="cta-row">
+        <a class="btn primary" href="/history/historical-records-1888-2008.pdf" target="_blank" rel="noopener">
+          Open the archive
+        </a>
+        <a class="btn ghost" href="/history/historical-records-1888-2008.pdf" download>
+          Download PDF (11.8 MB)
+        </a>
+      </div>
+      <div class="viewer">
+        <iframe
+          src="/history/historical-records-1888-2008.pdf#toolbar=1&navpanes=0"
+          title="Wallaroo FC Historical Records 1888-2008"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </div>
+  </section>
+
+  <!-- Notes / attribution -->
+  <section class="attribution">
+    <div class="container narrow">
+      <div class="eyebrow">Attribution</div>
+      <h3>Kept safe. Handed on.</h3>
+      <p>
+        The Historical Records book was compiled from newspaper archives by a Wallaroo club
+        person years ago and scanned to make a digital copy. It sits alongside the club's
+        <a href="/history/team-lists">Team-List Archive</a> and the
+        <a href="/history/chronicle">Club Chronicle</a> in our
+        <a href="/history">Heritage</a> collection.
+      </p>
+      <p>
+        For any correction, addition or query — a name misspelt, a goal missed, an SANFL
+        transfer we haven't recorded — please email
+        <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a> and we'll get it to
+        the Historian.
+      </p>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .container { margin: 0 auto; }
+  .container.wide   { max-width: 1200px; }
+  .container.narrow { max-width: 800px; }
+
+  .eyebrow {
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(36px, 5vw, 60px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    line-height: 0.95;
+    margin: 0 0 14px;
+  }
+  h2 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+  h3 {
+    font-family: var(--display);
+    font-size: clamp(24px, 3vw, 34px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 16px;
+  }
+
+  .lede {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    max-width: 780px;
+    margin-bottom: 40px;
+  }
+
+  /* ── Overview ────────────────────────────────────────────────────────── */
+  .overview { background: var(--white); padding: 90px 32px; border-bottom: 1px solid var(--line); }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .stat {
+    background: var(--cream);
+    border-left: 4px solid var(--red);
+    padding: 28px 30px;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat.highlight { background: var(--blue-deep); color: var(--white); }
+  .stat.highlight .stat-l { color: rgba(255,255,255,0.85); }
+  .stat.highlight .stat-sub { color: rgba(255,255,255,0.6); }
+  .stat-n {
+    font-family: var(--display);
+    font-size: 56px;
+    line-height: 1;
+    color: var(--red);
+  }
+  .stat.highlight .stat-n { color: #ff5570; }
+  .stat-l { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blue-deep); }
+  .stat-sub { font-family: var(--body); font-size: 12px; color: var(--grey); }
+
+  /* ── Records tables shared ───────────────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 6px;
+    box-shadow: 0 3px 20px rgba(10, 31, 61, 0.08);
+    margin-bottom: 12px;
+    background: var(--white);
+    border: 1px solid var(--line);
+  }
+  .records-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--body);
+    font-size: 14px;
+    background: var(--white);
+  }
+  .records-table thead th {
+    background: var(--blue-deep);
+    color: var(--white);
+    font-family: var(--headline);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .records-table tbody tr {
+    border-bottom: 1px solid var(--line);
+    transition: background 0.15s;
+  }
+  .records-table tbody tr:last-child { border-bottom: none; }
+  .records-table tbody tr:hover { background: rgba(20, 49, 92, 0.03); }
+  .records-table tbody td {
+    padding: 10px 16px;
+    color: var(--charcoal);
+    vertical-align: middle;
+  }
+  .records-table tbody tr.flag-year { background: rgba(200, 16, 46, 0.06); }
+  .records-table tbody tr.flag-year:hover { background: rgba(200, 16, 46, 0.10); }
+  .year-cell {
+    font-family: var(--display);
+    color: var(--blue-deep);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .flag-year .year-cell { color: var(--red); }
+  .year-col { width: 90px; }
+  .prem-col, .runner-col { width: 22%; }
+  .prem { font-weight: 600; color: var(--blue-deep); }
+  .prem-wallaroo {
+    font-weight: 700;
+    color: var(--red);
+    background: rgba(200,16,46,0.06);
+    padding-left: 12px;
+    border-left: 3px solid var(--red);
+  }
+  .wall-col { text-align: center; width: 80px; }
+  .wall-pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-family: var(--display);
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--white);
+    background: var(--grey);
+  }
+  .wall-pos-1 { background: var(--red); color: var(--white); }
+  .wall-pos-2 { background: #F0C420; color: var(--blue-deep); }
+  .wall-pos-3 { background: #B8724C; color: var(--white); }
+  .wall-pos-4 { background: var(--blue-deep); }
+  .wall-pos-5, .wall-pos-6, .wall-pos-7, .wall-pos-8, .wall-pos-9 { background: var(--grey); }
+  .wall-absent { color: var(--grey); font-style: italic; }
+
+  .ypfl-note {
+    font-family: var(--serif);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--grey);
+    padding: 12px 16px;
+    background: var(--cream);
+    border-left: 2px solid var(--red);
+    border-radius: 4px;
+    max-width: 780px;
+  }
+
+  /* ── Section backgrounds ─────────────────────────────────────────── */
+  .ypfl   { background: var(--cream); padding: 90px 32px; }
+  .grades { background: var(--white); padding: 90px 32px; border-top: 1px solid var(--line); }
+  .medals { background: var(--cream); padding: 90px 32px; border-top: 1px solid var(--line); }
+  .sanfl  { background: var(--white); padding: 90px 32px; border-top: 1px solid var(--line); }
+  .archive { background: var(--blue-darkest); color: var(--white); padding: 100px 32px; border-top: 4px solid var(--red); }
+  .attribution { background: var(--cream); padding: 80px 32px 100px; border-top: 1px solid var(--line); }
+
+  /* ── Medals ─────────────────────────────────────────────────────── */
+  .medals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .medal-col {
+    background: var(--white);
+    padding: 24px 26px;
+    border-radius: 6px;
+    border-top: 3px solid var(--red);
+    box-shadow: 0 2px 12px rgba(10, 31, 61, 0.06);
+  }
+  .medal-col h3 {
+    font-family: var(--display);
+    font-size: 20px;
+    color: var(--red);
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    letter-spacing: 0.03em;
+  }
+  .medal-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .medal-list li {
+    display: grid;
+    grid-template-columns: 46px 1fr auto;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .medal-list li:last-child { border-bottom: none; }
+  .medal-year {
+    font-family: var(--display);
+    font-size: 15px;
+    color: var(--blue-deep);
+    letter-spacing: 0.04em;
+  }
+  .medal-name {
+    font-family: var(--body);
+    font-size: 14px;
+    color: var(--charcoal);
+    font-weight: 500;
+  }
+  .medal-detail {
+    font-family: var(--display);
+    font-size: 12px;
+    color: var(--red);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  /* ── SANFL ──────────────────────────────────────────────────────── */
+  .letter-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 40px;
+    padding: 14px 18px;
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .letter-jump {
+    font-family: var(--display);
+    font-size: 15px;
+    color: var(--blue-deep);
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 6px 10px;
+    text-decoration: none;
+    transition: all 0.15s;
+    min-width: 30px;
+    text-align: center;
+  }
+  .letter-jump:hover { background: var(--red); color: var(--white); border-color: var(--red); }
+  .sanfl-block { margin-bottom: 40px; scroll-margin-top: 80px; }
+  .sanfl-letter {
+    font-family: var(--display);
+    font-size: 44px;
+    color: var(--red);
+    line-height: 1;
+    margin: 0 0 20px;
+    letter-spacing: 0.04em;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  .sanfl-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+  .sanfl-row {
+    background: var(--cream);
+    border-left: 3px solid var(--red);
+    padding: 16px 20px;
+    border-radius: 0 4px 4px 0;
+  }
+  .sanfl-name {
+    font-family: var(--display);
+    font-size: 18px;
+    color: var(--blue-deep);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+  .sanfl-clubs {
+    font-family: var(--serif);
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--charcoal);
+  }
+  .sanfl-note {
+    font-family: var(--serif);
+    font-size: 14px;
+    font-style: italic;
+    color: var(--red);
+    margin-top: 6px;
+  }
+
+  /* ── Archive viewer ───────────────────────────────────────────────── */
+  .archive h2 { color: var(--white); }
+  .archive .lede { color: rgba(255,255,255,0.78); max-width: 780px; }
+  .archive .eyebrow { color: rgba(255,255,255,0.7); }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0 40px; }
+  .btn {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 14px 24px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .btn.primary { background: var(--red); color: var(--white); border: 2px solid var(--red); }
+  .btn.primary:hover { background: var(--red-deep); border-color: var(--red-deep); }
+  .btn.ghost { background: transparent; color: var(--white); border: 2px solid var(--white); }
+  .btn.ghost:hover { background: var(--white); color: var(--blue-deep); }
+  .viewer {
+    background: var(--cream);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.3);
+  }
+  .viewer iframe {
+    width: 100%;
+    height: 80vh;
+    min-height: 640px;
+    display: block;
+    border: none;
+    background: var(--cream);
+  }
+
+  /* ── Attribution ────────────────────────────────────────────────── */
+  .attribution p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 16px;
+  }
+  .attribution a {
+    color: var(--red);
+    border-bottom: 2px solid var(--red);
+    text-decoration: none;
+  }
+
+  @media (max-width: 720px) {
+    .overview, .ypfl, .grades, .medals, .sanfl, .archive, .attribution { padding: 56px 24px; }
+    .stat-n { font-size: 44px; }
+    .viewer iframe { height: 70vh; min-height: 480px; }
+  }
+</style>

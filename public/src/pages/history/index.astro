@@ -81,10 +81,16 @@ for (const m of [...LIFE_MEMBERS].sort((a, b) => a.year - b.year)) {
       <div class="eyebrow">Deep Archives</div>
       <h2>The <span class="ital">source records.</span></h2>
       <p class="lede">
-        Three companion documents preserved from the club archive — each a piece of the
+        Four companion documents preserved from the club archive — each a piece of the
         story from the game's earliest days on the Yorke Peninsula.
       </p>
       <div class="archive-cards">
+        <a href="/history/records" class="archive-card feature">
+          <span class="ac-eyebrow">1888 – 2008</span>
+          <h3>Historical Records</h3>
+          <p>The full 122-page ledger — YPFL ladders, mail medallists, other-grade premierships and every Bulldog to the SANFL. The showpiece.</p>
+          <span class="ac-cta">Open the records →</span>
+        </a>
         <a href="/history/chronicle" class="archive-card">
           <span class="ac-eyebrow">1884 – 1967</span>
           <h3>Club Chronicle</h3>
@@ -479,6 +485,21 @@ for (const m of [...LIFE_MEMBERS].sort((a, b) => a.year - b.year)) {
   .archive-card:hover {
     background: rgba(200, 16, 46, 0.1);
     transform: translateY(-3px);
+  }
+  .archive-card.feature {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, rgba(200,16,46,0.14), rgba(200,16,46,0.06));
+    border-left-width: 6px;
+    padding: 32px 34px;
+  }
+  .archive-card.feature h3 { font-size: 40px; }
+  .archive-card.feature p { font-size: 17px; }
+  @media (min-width: 900px) {
+    .archive-card.feature { display: grid; grid-template-columns: 220px 1fr auto; align-items: center; gap: 24px; }
+    .archive-card.feature .ac-eyebrow { align-self: center; }
+    .archive-card.feature h3 { grid-column: 2; margin: 0; }
+    .archive-card.feature p { grid-column: 2; }
+    .archive-card.feature .ac-cta { grid-column: 3; border-top: none; padding-top: 0; padding-left: 20px; border-left: 1px solid rgba(255,255,255,0.15); align-self: center; }
   }
   .ac-eyebrow {
     font-family: var(--headline);
