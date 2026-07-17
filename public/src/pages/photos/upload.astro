@@ -1,0 +1,563 @@
+---
+export const prerender = false;
+import PageLayout from '../../layouts/PageLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+import { getSession } from '../../lib/photo-hub';
+
+const db = getAdminClient();
+const session = await getSession(Astro.cookies);
+
+// Load fixtures once — the picker chews from this.
+const { data: fixturesRaw } = await db
+  .from('fixtures')
+  .select('id, season, round, grade, match_date, match_time, venue, opponent, is_home')
+  .eq('season', 2026)
+  .order('match_date', { ascending: false })
+  .limit(200);
+const fixtures = fixturesRaw ?? [];
+
+const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Boolean))) as string[];
+---
+<PageLayout
+  title="Contribute Photos · Wallaroo FC"
+  description="Match photographers upload here — sign in with your mobile, pick the match, drag your photos over. The club approves before publishing."
+>
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">Media Contributor</div>
+      <h1>Send in your <span class="ital">match photos.</span></h1>
+      <p class="lead">
+        Photographers approved by the club can upload directly to the Wallaroo FC gallery.
+        Sign in with your mobile, choose the match, drag your photos across. The Committee
+        checks every photo before it appears on the site.
+      </p>
+    </div>
+  </section>
+
+  <section class="body">
+    <div class="body-inner">
+
+      {!session ? (
+        <div class="panel signin">
+          <h2>Sign in</h2>
+
+          <div id="step-mobile" class="step-block">
+            <label for="mobile">Your mobile number</label>
+            <input id="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="0400 000 000" />
+            <p class="hint">We'll send you a six-digit code by text. Codes are one-time and expire after 10 minutes.</p>
+            <button type="button" id="request-code" class="btn primary">Send me a code</button>
+            <p id="mobile-error" class="err" hidden></p>
+          </div>
+
+          <div id="step-code" class="step-block" hidden>
+            <label for="code">Enter the 6-digit code</label>
+            <input id="code" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
+            <div class="btn-row">
+              <button type="button" id="verify-code" class="btn primary">Sign in</button>
+              <button type="button" id="back-to-mobile" class="btn ghost">Use a different number</button>
+            </div>
+            <p id="code-error" class="err" hidden></p>
+          </div>
+        </div>
+      ) : (
+        <div class="panel">
+          <div class="signed-in">
+            <div>
+              <div class="hint">Signed in as</div>
+              <div class="mobile-line">{session.full_name ?? session.mobile}</div>
+            </div>
+            <form method="post" action="/api/photos/logout">
+              <button type="submit" class="btn ghost small">Sign out</button>
+            </form>
+          </div>
+
+          <hr />
+
+          <h2>Choose the match</h2>
+          <div class="fixture-picker">
+            <div class="pill-row">
+              <label>
+                <span>Grade</span>
+                <select id="grade">
+                  <option value="">— any —</option>
+                  {grades.map(g => <option value={g}>{g}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Match</span>
+                <select id="fixture-select">
+                  <option value="">Pick a match…</option>
+                  {fixtures.map(f => (
+                    <option
+                      value={f.id}
+                      data-round={f.round ?? ''}
+                      data-grade={f.grade ?? ''}
+                      data-opp={f.opponent ?? ''}
+                      data-venue={f.venue ?? ''}
+                      data-date={f.match_date ?? ''}
+                      data-is-home={String(f.is_home)}
+                    >
+                      Rd {f.round} · {f.grade} · v {f.opponent} · {f.match_date}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div id="fixture-details" class="fixture-details" hidden>
+              <div><span class="det-label">Round</span><span id="d-round">—</span></div>
+              <div><span class="det-label">Grade</span><span id="d-grade">—</span></div>
+              <div><span class="det-label">Opponent</span><span id="d-opp">—</span></div>
+              <div><span class="det-label">Venue</span><span id="d-venue">—</span></div>
+              <div><span class="det-label">Date</span><span id="d-date">—</span></div>
+            </div>
+          </div>
+
+          <h2>Drop your photos</h2>
+          <div id="dropzone" class="dropzone">
+            <input id="file-input" type="file" accept="image/*" multiple hidden />
+            <div class="dropzone-inner">
+              <div class="drop-icon">⇑</div>
+              <div class="drop-title">Drag photos here</div>
+              <div class="drop-sub">or click to pick from your computer. Up to 200 photos per batch.</div>
+            </div>
+          </div>
+
+          <div id="file-list" class="file-list" hidden></div>
+
+          <label class="consent">
+            <input id="consent" type="checkbox" />
+            <span>
+              I confirm the photos I'm uploading are mine to share, they don't include any children whose
+              parents have asked not to be photographed, and I understand the club chooses which will appear
+              on the public site.
+            </span>
+          </label>
+
+          <p class="note-field">
+            <label for="batch-note">Optional note to the moderator</label>
+            <textarea id="batch-note" rows="2" placeholder="e.g. Round 12 U11s home game — plenty of action shots from the last quarter."></textarea>
+          </p>
+
+          <div class="submit-row">
+            <button id="submit-btn" class="btn primary big" disabled>Submit to Club</button>
+            <span id="submit-status" class="submit-status"></span>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+
+</PageLayout>
+
+<style>
+  .hero {
+    background: linear-gradient(180deg, var(--blue-darkest) 0%, var(--blue-deep) 100%);
+    color: var(--white);
+    padding: 100px 32px 60px;
+    border-bottom: 4px solid var(--red);
+  }
+  .hero-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+  .eyebrow {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 14px;
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(44px, 8vw, 96px);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    line-height: 0.95;
+  }
+  .hero h1 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+  .lead {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .body { background: var(--cream); padding: 60px 24px 100px; }
+  .body-inner { max-width: 900px; margin: 0 auto; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 32px 36px;
+    box-shadow: 0 4px 24px rgba(10,31,61,0.06);
+  }
+  .panel h2 {
+    font-family: var(--display);
+    font-size: clamp(24px, 3vw, 32px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 18px;
+  }
+  .signin { max-width: 480px; margin: 0 auto; }
+
+  label {
+    font-family: var(--headline);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey);
+    display: block;
+    margin-bottom: 8px;
+  }
+  input[type=tel], input[type=text], input[type=email], select, textarea {
+    width: 100%;
+    background: var(--white);
+    border: 1px solid var(--line);
+    color: var(--charcoal);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-family: var(--body);
+    font-size: 16px;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--red); }
+  #code { text-align: center; letter-spacing: 0.4em; font-family: var(--display); font-size: 24px; }
+
+  .btn {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .btn.primary { background: var(--red); color: var(--white); border-color: var(--red); }
+  .btn.primary:hover { background: var(--red-deep); border-color: var(--red-deep); }
+  .btn.primary:disabled { background: var(--grey); border-color: var(--grey); cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--blue-deep); border-color: var(--blue-deep); }
+  .btn.ghost:hover { background: var(--blue-deep); color: var(--white); }
+  .btn.ghost.small { padding: 6px 12px; font-size: 11px; }
+  .btn.big { padding: 16px 32px; font-size: 15px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  .step-block { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .step-block .btn { margin-top: 16px; align-self: flex-start; }
+  .hint { font-family: var(--serif); font-size: 13px; color: var(--grey); font-style: italic; margin: 0; }
+  .err { font-family: var(--body); font-size: 13px; color: var(--red); margin: 8px 0 0; }
+
+  .signed-in {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 16px; margin-bottom: 12px;
+  }
+  .mobile-line { font-family: var(--display); font-size: 20px; color: var(--blue-deep); letter-spacing: 0.02em; }
+
+  hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+
+  .fixture-picker { margin-bottom: 32px; }
+  .pill-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 14px; }
+  .pill-row label { display: flex; flex-direction: column; margin: 0; }
+  .pill-row label span { margin-bottom: 6px; }
+
+  .fixture-details {
+    background: var(--cream);
+    border-left: 3px solid var(--red);
+    padding: 14px 18px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px 20px;
+    border-radius: 0 4px 4px 0;
+  }
+  .fixture-details > div { display: flex; flex-direction: column; }
+  .det-label {
+    font-family: var(--headline);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+  .fixture-details > div > span:last-child { font-family: var(--body); font-size: 14px; color: var(--charcoal); }
+
+  .dropzone {
+    background: rgba(200,16,46,0.03);
+    border: 2px dashed rgba(200,16,46,0.4);
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    margin-bottom: 20px;
+  }
+  .dropzone:hover, .dropzone.drag {
+    background: rgba(200,16,46,0.07);
+    border-color: var(--red);
+  }
+  .drop-icon {
+    font-family: var(--display);
+    font-size: 48px;
+    color: var(--red);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .drop-title {
+    font-family: var(--display);
+    font-size: 22px;
+    color: var(--blue-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .drop-sub { font-family: var(--serif); font-size: 14px; color: var(--grey); font-style: italic; }
+
+  .file-list {
+    background: var(--cream);
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    max-height: 260px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .file-list .file-chip {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .file-chip img { width: 100%; height: 90px; object-fit: cover; border-radius: 3px; }
+  .file-chip .fname {
+    font-family: var(--body);
+    font-size: 10px;
+    color: var(--grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .consent {
+    display: flex;
+    gap: 12px;
+    background: var(--cream);
+    padding: 14px 18px;
+    border-radius: 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--serif);
+    font-size: 14px;
+    color: var(--charcoal);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+  .consent input { margin-top: 4px; flex-shrink: 0; width: 18px; height: 18px; }
+
+  .note-field textarea { margin-top: 6px; }
+  .note-field label { display: block; margin-bottom: 4px; }
+
+  .submit-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .submit-status { font-family: var(--serif); font-size: 14px; color: var(--grey); }
+
+  @media (max-width: 640px) {
+    .panel { padding: 24px 22px; }
+    .pill-row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  // ── Sign-in flow ────────────────────────────────────────────────────
+  const stepMobile   = document.getElementById('step-mobile');
+  const stepCode     = document.getElementById('step-code');
+  const mobileInput  = document.getElementById('mobile') as HTMLInputElement | null;
+  const codeInput    = document.getElementById('code') as HTMLInputElement | null;
+  const reqBtn       = document.getElementById('request-code');
+  const verifyBtn    = document.getElementById('verify-code');
+  const backBtn      = document.getElementById('back-to-mobile');
+  const mobileErr    = document.getElementById('mobile-error');
+  const codeErr      = document.getElementById('code-error');
+
+  reqBtn?.addEventListener('click', async () => {
+    if (!mobileInput || !mobileErr) return;
+    mobileErr.hidden = true; mobileErr.textContent = '';
+    (reqBtn as HTMLButtonElement).disabled = true;
+    (reqBtn as HTMLButtonElement).textContent = 'Sending…';
+    const res = await fetch('/api/photos/request-code', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile: mobileInput.value }),
+    });
+    const j = await res.json().catch(() => ({}));
+    (reqBtn as HTMLButtonElement).disabled = false;
+    (reqBtn as HTMLButtonElement).textContent = 'Send me a code';
+    if (!res.ok || !j.ok) {
+      mobileErr.textContent = j.error || 'Could not send code.';
+      mobileErr.hidden = false;
+      return;
+    }
+    if (stepMobile) stepMobile.hidden = true;
+    if (stepCode)   stepCode.hidden = false;
+    codeInput?.focus();
+  });
+
+  backBtn?.addEventListener('click', () => {
+    if (stepMobile) stepMobile.hidden = false;
+    if (stepCode)   stepCode.hidden = true;
+    if (codeInput) codeInput.value = '';
+  });
+
+  verifyBtn?.addEventListener('click', async () => {
+    if (!mobileInput || !codeInput || !codeErr) return;
+    codeErr.hidden = true; codeErr.textContent = '';
+    (verifyBtn as HTMLButtonElement).disabled = true;
+    (verifyBtn as HTMLButtonElement).textContent = 'Signing in…';
+    const res = await fetch('/api/photos/verify-code', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile: mobileInput.value, code: codeInput.value.trim() }),
+    });
+    const j = await res.json().catch(() => ({}));
+    (verifyBtn as HTMLButtonElement).disabled = false;
+    (verifyBtn as HTMLButtonElement).textContent = 'Sign in';
+    if (!res.ok || !j.ok) {
+      codeErr.textContent = j.error || 'Sign-in failed.';
+      codeErr.hidden = false;
+      return;
+    }
+    window.location.reload();
+  });
+
+  // ── Upload flow (only present when signed in) ───────────────────────
+  const fixSel   = document.getElementById('fixture-select') as HTMLSelectElement | null;
+  const gradeSel = document.getElementById('grade') as HTMLSelectElement | null;
+  const details  = document.getElementById('fixture-details');
+  const dropzone = document.getElementById('dropzone');
+  const fileInput= document.getElementById('file-input') as HTMLInputElement | null;
+  const fileList = document.getElementById('file-list');
+  const consent  = document.getElementById('consent') as HTMLInputElement | null;
+  const submit   = document.getElementById('submit-btn') as HTMLButtonElement | null;
+  const status   = document.getElementById('submit-status');
+  const note     = document.getElementById('batch-note') as HTMLTextAreaElement | null;
+
+  let selectedFiles: File[] = [];
+
+  function updateSubmit() {
+    if (!submit) return;
+    submit.disabled = !(fixSel?.value && consent?.checked && selectedFiles.length > 0);
+  }
+
+  gradeSel?.addEventListener('change', () => {
+    if (!fixSel) return;
+    const g = gradeSel.value;
+    for (const opt of Array.from(fixSel.options)) {
+      if (!opt.value) continue;
+      const optGrade = opt.getAttribute('data-grade') ?? '';
+      opt.hidden = !!g && optGrade !== g;
+    }
+    // If the current selection is now hidden, reset.
+    const cur = fixSel.selectedOptions[0];
+    if (cur && cur.hidden) { fixSel.value = ''; details && (details.hidden = true); updateSubmit(); }
+  });
+
+  fixSel?.addEventListener('change', () => {
+    if (!fixSel || !details) return;
+    const opt = fixSel.selectedOptions[0];
+    if (!opt || !opt.value) { details.hidden = true; updateSubmit(); return; }
+    (document.getElementById('d-round') as HTMLElement).textContent = opt.getAttribute('data-round') || '—';
+    (document.getElementById('d-grade') as HTMLElement).textContent = opt.getAttribute('data-grade') || '—';
+    (document.getElementById('d-opp')   as HTMLElement).textContent = 'v ' + (opt.getAttribute('data-opp') || '—');
+    (document.getElementById('d-venue') as HTMLElement).textContent = opt.getAttribute('data-venue') || '—';
+    (document.getElementById('d-date')  as HTMLElement).textContent = opt.getAttribute('data-date') || '—';
+    details.hidden = false;
+    updateSubmit();
+  });
+
+  consent?.addEventListener('change', updateSubmit);
+
+  function renderFileList() {
+    if (!fileList) return;
+    fileList.innerHTML = '';
+    if (selectedFiles.length === 0) { fileList.hidden = true; return; }
+    fileList.hidden = false;
+    for (const f of selectedFiles) {
+      const chip = document.createElement('div');
+      chip.className = 'file-chip';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const name = document.createElement('span');
+      name.className = 'fname';
+      name.textContent = f.name;
+      chip.appendChild(img);
+      chip.appendChild(name);
+      fileList.appendChild(chip);
+    }
+  }
+
+  function addFiles(files: FileList | File[]) {
+    for (const f of Array.from(files)) {
+      if (f.type.startsWith('image/')) selectedFiles.push(f);
+    }
+    renderFileList();
+    updateSubmit();
+  }
+
+  dropzone?.addEventListener('click', () => fileInput?.click());
+  fileInput?.addEventListener('change', () => fileInput.files && addFiles(fileInput.files));
+  ['dragover','dragenter'].forEach(evt => dropzone?.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(evt => dropzone?.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+  }));
+  dropzone?.addEventListener('drop', e => {
+    const dt = (e as DragEvent).dataTransfer;
+    if (dt?.files) addFiles(dt.files);
+  });
+
+  submit?.addEventListener('click', async () => {
+    if (!fixSel || !status) return;
+    const opt = fixSel.selectedOptions[0];
+    if (!opt) return;
+    submit.disabled = true;
+    submit.textContent = 'Uploading…';
+    status.textContent = `Uploading ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`;
+
+    const fd = new FormData();
+    fd.append('fixture_id', opt.value);
+    fd.append('round',      opt.getAttribute('data-round')  ?? '');
+    fd.append('grade',      opt.getAttribute('data-grade')  ?? '');
+    fd.append('opponent',   opt.getAttribute('data-opp')    ?? '');
+    fd.append('venue',      opt.getAttribute('data-venue')  ?? '');
+    fd.append('match_date', opt.getAttribute('data-date')   ?? '');
+    fd.append('note',       note?.value ?? '');
+    fd.append('consent_ack','true');
+    for (const f of selectedFiles) fd.append('files', f, f.name);
+
+    const res = await fetch('/api/photos/upload', { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    submit.textContent = 'Submit to Club';
+    if (!res.ok || !j.ok) {
+      status.textContent = j.error || 'Upload failed.';
+      submit.disabled = false;
+      return;
+    }
+    status.textContent = `Uploaded ${j.uploaded} of ${selectedFiles.length}. Committee will review shortly.`;
+    selectedFiles = [];
+    renderFileList();
+    if (fileInput) fileInput.value = '';
+    if (consent) consent.checked = false;
+    updateSubmit();
+  });
+</script>
