@@ -1,0 +1,348 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { PREMIERSHIP_PLAYERS } from '../../lib/premiership-players.ts';
+
+// All unique premiership years present in the data, ascending.
+const yearSet = new Set<number>();
+for (const p of PREMIERSHIP_PLAYERS) for (const y of p.years) yearSet.add(y);
+const YEARS = Array.from(yearSet).sort((a, b) => a - b);
+
+// Players who played in more than one premiership — the multi-flag legends.
+const multiFlag = PREMIERSHIP_PLAYERS
+  .filter(p => p.years.length >= 3)
+  .sort((a, b) => b.years.length - a.years.length || a.surname.localeCompare(b.surname));
+
+// Group all players alphabetically by first-letter of surname.
+type Bucket = { letter: string; rows: typeof PREMIERSHIP_PLAYERS };
+const buckets: Bucket[] = [];
+for (const p of PREMIERSHIP_PLAYERS) {
+  const l = (p.surname.charAt(0) || '?').toUpperCase();
+  let last = buckets[buckets.length - 1];
+  if (!last || last.letter !== l) {
+    last = { letter: l, rows: [] };
+    buckets.push(last);
+  }
+  last.rows.push(p);
+}
+
+const totalPlayers = PREMIERSHIP_PLAYERS.length;
+---
+<PageLayout
+  title="A Grade Premiership Players · Wallaroo FC"
+  description="Every Bulldog to have played in a Wallaroo Football Club A Grade premiership. 242 names spanning 23 flag-year seasons from 1902 to 2000."
+>
+  <PageHero
+    eyebrow="Honour Roll"
+    title="Premiership Bulldogs,"
+    titleItalic="every name that lifted a flag."
+    intro={`${totalPlayers} A Grade premiership players across ${YEARS.length} flag seasons from ${YEARS[0]} to ${YEARS[YEARS.length - 1]}. If a Bulldog ran out on premiership day, their name is here.`}
+  />
+
+  <!-- Year strip -->
+  <section class="year-strip">
+    <div class="container wide">
+      <div class="eyebrow">Flag Years</div>
+      <div class="year-grid">
+        {YEARS.map(y => (
+          <span class="year-chip">{y}</span>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Multi-flag legends -->
+  <section class="legends">
+    <div class="container wide">
+      <div class="eyebrow">Multi-Flag Legends</div>
+      <h2>Three or more <span class="ital">premierships won.</span></h2>
+      <p class="lede">
+        The Bulldogs on this board played in at least three A Grade premierships for the club —
+        the men who defined an era.
+      </p>
+      <ol class="legend-list">
+        {multiFlag.map(p => (
+          <li>
+            <span class="legend-name">{p.display}</span>
+            <span class="legend-count">{p.years.length}×</span>
+            <span class="legend-years">{p.years.join('  ·  ')}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <!-- Full roll, alphabetical -->
+  <section class="roll">
+    <div class="container wide">
+      <div class="eyebrow">The Full Roll</div>
+      <h2>Every premiership player <span class="ital">A to Z.</span></h2>
+      <p class="lede">{totalPlayers} names, sorted by surname. Premiership years listed alongside each player.</p>
+
+      <div class="letter-strip">
+        {buckets.map(b => (
+          <a href={`#letter-${b.letter}`} class="letter-jump">{b.letter}</a>
+        ))}
+      </div>
+
+      {buckets.map(b => (
+        <div class="letter-block" id={`letter-${b.letter}`}>
+          <h3 class="letter-h">{b.letter}</h3>
+          <ul class="player-list">
+            {b.rows.map(p => (
+              <li class="player-card">
+                <div class="player-name">{p.display}</div>
+                <div class="player-years">
+                  {p.years.map(y => <span class="flag-badge">{y}</span>)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="source">
+    <div class="container narrow">
+      <div class="eyebrow">The Source</div>
+      <h3>Recorded and preserved.</h3>
+      <p>
+        This roll was transcribed from the club archive by <strong>Michael West</strong>,
+        Wallaroo FC Historian. Where a name from an early press report survived without an
+        initial (e.g. "Barnes 1914", "Rev. A.I. Brown 1925"), it appears as originally
+        recorded.
+      </p>
+      <p>
+        If a Bulldog is missing or misnamed, please email
+        <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a> — every name matters.
+      </p>
+      <p>
+        <a class="download" href="/history/a-grade-premiership-players.pdf" target="_blank" rel="noopener">
+          ⬇ Download the source PDF (102 KB)
+        </a>
+      </p>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .container { margin: 0 auto; }
+  .container.wide   { max-width: 1200px; }
+  .container.narrow { max-width: 780px; }
+
+  .eyebrow {
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(36px, 4.5vw, 56px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    line-height: 0.95;
+    margin: 0 0 14px;
+  }
+  h2 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+
+  .lede {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.65;
+    color: var(--charcoal);
+    max-width: 720px;
+    margin-bottom: 40px;
+  }
+
+  /* ── Year strip ──────────────────────────────────────────────────────── */
+  .year-strip {
+    background: var(--blue-darkest);
+    padding: 56px 32px;
+    color: var(--white);
+    border-bottom: 3px solid var(--red);
+  }
+  .year-strip .eyebrow { color: rgba(255, 255, 255, 0.75); }
+  .year-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .year-chip {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(200, 16, 46, 0.4);
+    color: var(--white);
+    padding: 8px 16px;
+    border-radius: 3px;
+    font-family: var(--display);
+    font-size: 18px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Multi-flag legends ──────────────────────────────────────────────── */
+  .legends { background: var(--cream); padding: 80px 32px; border-bottom: 1px solid var(--line); }
+  .legend-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 12px;
+  }
+  .legend-list li {
+    background: var(--white);
+    border-left: 3px solid var(--red);
+    padding: 14px 18px;
+    border-radius: 0 4px 4px 0;
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) 48px auto;
+    align-items: baseline;
+    gap: 14px;
+    box-shadow: 0 1px 8px rgba(10, 31, 61, 0.05);
+  }
+  .legend-name {
+    font-family: var(--display);
+    font-size: 18px;
+    color: var(--blue-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .legend-count {
+    font-family: var(--display);
+    font-size: 24px;
+    color: var(--red);
+    text-align: right;
+    line-height: 1;
+  }
+  .legend-years {
+    font-family: var(--body);
+    font-size: 12px;
+    color: var(--grey);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Full roll ───────────────────────────────────────────────────────── */
+  .roll { background: var(--white); padding: 80px 32px; border-bottom: 1px solid var(--line); }
+
+  .letter-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 40px;
+    padding: 14px 16px;
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  .letter-jump {
+    font-family: var(--display);
+    font-size: 15px;
+    color: var(--blue-deep);
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 6px 10px;
+    text-decoration: none;
+    transition: all 0.15s;
+    min-width: 30px;
+    text-align: center;
+  }
+  .letter-jump:hover {
+    background: var(--red);
+    color: var(--white);
+    border-color: var(--red);
+  }
+
+  .letter-block { margin-bottom: 40px; scroll-margin-top: 80px; }
+  .letter-h {
+    font-family: var(--display);
+    font-size: 44px;
+    color: var(--red);
+    line-height: 1;
+    margin: 0 0 20px;
+    letter-spacing: 0.04em;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+
+  .player-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+  .player-card {
+    background: var(--cream);
+    padding: 12px 16px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    border-left: 2px solid var(--red);
+  }
+  .player-name {
+    font-family: var(--display);
+    font-size: 16px;
+    color: var(--blue-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .player-years { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .flag-badge {
+    font-family: var(--body);
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    background: var(--red);
+    color: var(--white);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  /* ── Source ──────────────────────────────────────────────────────────── */
+  .source { background: var(--cream); padding: 80px 32px 100px; }
+  .source h3 {
+    font-family: var(--display);
+    font-size: clamp(26px, 3vw, 38px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 18px;
+  }
+  .source p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 18px;
+  }
+  .source a {
+    color: var(--red);
+    border-bottom: 2px solid var(--red);
+    text-decoration: none;
+  }
+  .source a.download {
+    display: inline-block;
+    background: var(--blue-deep);
+    color: var(--white);
+    padding: 12px 22px;
+    border-radius: 4px;
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border: none;
+    margin-top: 6px;
+    transition: background 0.2s;
+  }
+  .source a.download:hover { background: var(--red); }
+
+  @media (max-width: 720px) {
+    .year-strip, .legends, .roll, .source { padding: 56px 24px; }
+    .legend-list li { grid-template-columns: 1fr; gap: 4px; }
+    .legend-count { text-align: left; }
+  }
+</style>

@@ -1,0 +1,201 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+---
+<PageLayout
+  title="Team Lists 1888–1980 · Wallaroo FC"
+  description="The Wallaroo Football Club team-list archive — every recorded A Grade line-up from 1888 to 1980, transcribed from newspaper reports and club budgets. The full source document, page by page."
+>
+  <PageHero
+    eyebrow="Team-List Archive"
+    title="Every recorded line-up,"
+    titleItalic="1888 to 1980."
+    intro="Ninety-two years of A Grade team sheets, scanned from newspapers and club budgets. The archive that carries the club forward into the modern era where our current games-tally begins."
+  />
+
+  <section class="intro">
+    <div class="container narrow">
+      <div class="eyebrow">A note from the Historian</div>
+      <blockquote class="note">
+        Teamlists dating back to the 1880s through to 1980, where the current games tally
+        was started. This was recorded from the newspapers, much like the other documents.
+        As such, I can't guarantee accuracy.
+        <br /><br />
+        Also, primarily only A Grade was listed. I can't be sure it lists every game everyone
+        played, because the information comes from the papers (and later, budgets), so games
+        may be missing and it may favour goalkickers and best players.
+        <br /><br />
+        A hard copy can be read at the club.
+      </blockquote>
+    </div>
+  </section>
+
+  <section class="archive">
+    <div class="container wide">
+      <div class="eyebrow">The Archive</div>
+      <h2>Ninety-two years <span class="ital">of Bulldogs.</span></h2>
+      <p class="lede">
+        The archive spans <strong>1888 to 1980</strong> — the point at which the club's current
+        games-played tally begins. From the earliest Yorke Peninsula Football Association
+        line-ups on rutted country ovals, through two World Wars, the mining decline, and the
+        first Bulldog premierships. Every scanned page is preserved below.
+      </p>
+
+      <div class="cta-row">
+        <a class="btn primary" href="/history/team-lists-1888-1980.pdf" target="_blank" rel="noopener">
+          Open the archive
+        </a>
+        <a class="btn ghost" href="/history/team-lists-1888-1980.pdf" download>
+          Download PDF (22.6 MB)
+        </a>
+      </div>
+
+      <div class="viewer">
+        <iframe
+          src="/history/team-lists-1888-1980.pdf#toolbar=1&navpanes=0"
+          title="Wallaroo FC Team Lists 1888–1980"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="container narrow">
+      <div class="eyebrow">Beyond 1980</div>
+      <h3>The modern games register.</h3>
+      <p>
+        From 1980 onward the club maintains a full games-played register, and the two
+        Bulldogs at the head of the pack are <strong>Darren Smith (390 games)</strong> and
+        <strong>Lindsay Smith (312 games)</strong>. Both feature on our
+        <a href="/history">150 Games Club board</a>.
+      </p>
+      <p>
+        Older reports, photographs and jumpers not in this document sit at the clubrooms —
+        contact the Historian <strong>Michael West</strong> via
+        <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a> to make an
+        appointment.
+      </p>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .container { margin: 0 auto; }
+  .container.wide   { max-width: 1200px; }
+  .container.narrow { max-width: 780px; }
+
+  .eyebrow {
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(36px, 4.5vw, 56px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    line-height: 0.95;
+    margin: 0 0 14px;
+  }
+  h2 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+  h3 {
+    font-family: var(--display);
+    font-size: clamp(26px, 3vw, 38px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 18px;
+  }
+
+  .lede {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 32px;
+    max-width: 780px;
+  }
+
+  /* ── Intro / historian note ─────────────────────────────────────────── */
+  .intro { background: var(--cream); padding: 72px 32px; border-bottom: 1px solid var(--line); }
+  .note {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.75;
+    color: var(--charcoal);
+    background: var(--white);
+    border-left: 3px solid var(--red);
+    padding: 24px 28px;
+    margin: 0;
+    box-shadow: 0 2px 12px rgba(10, 31, 61, 0.05);
+  }
+
+  /* ── Archive with embedded viewer ───────────────────────────────────── */
+  .archive { background: var(--white); padding: 80px 32px; border-bottom: 1px solid var(--line); }
+
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0 40px; }
+  .btn {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 14px 24px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .btn.primary {
+    background: var(--red);
+    color: var(--white);
+    border: 2px solid var(--red);
+  }
+  .btn.primary:hover { background: var(--red-deep); border-color: var(--red-deep); }
+  .btn.ghost {
+    background: transparent;
+    color: var(--blue-deep);
+    border: 2px solid var(--blue-deep);
+  }
+  .btn.ghost:hover { background: var(--blue-deep); color: var(--white); }
+
+  .viewer {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(10, 31, 61, 0.08);
+  }
+  .viewer iframe {
+    width: 100%;
+    height: 80vh;
+    min-height: 640px;
+    display: block;
+    border: none;
+    background: var(--cream);
+  }
+
+  /* ── Closing ──────────────────────────────────────────────────────── */
+  .closing { background: var(--cream); padding: 80px 32px 100px; }
+  .closing p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 16px;
+  }
+  .closing a {
+    color: var(--red);
+    border-bottom: 2px solid var(--red);
+    text-decoration: none;
+  }
+
+  @media (max-width: 720px) {
+    .intro, .archive, .closing { padding: 56px 24px; }
+    .viewer iframe { height: 70vh; min-height: 480px; }
+  }
+</style>
