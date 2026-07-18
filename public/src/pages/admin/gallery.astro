@@ -82,23 +82,35 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
   <!-- Pass public credentials to client-side upload script -->
   <div id="gallery-config" data-url={supabaseUrl} data-anon={supabaseAnon} style="display:none"></div>
 
-  <a href="/admin/gallery/review" class={`review-banner ${(pendingReviewCount ?? 0) > 0 ? 'alert' : 'quiet'}`}>
-    <span class="rb-icon">📸</span>
-    <span class="rb-body">
-      <span class="rb-title">
-        {pendingReviewCount && pendingReviewCount > 0
-          ? `${pendingReviewCount} contributor photo${pendingReviewCount === 1 ? '' : 's'} awaiting review`
-          : 'Contributor photo queue is empty'}
+  <div class="hub-banners">
+    <a href="/admin/gallery/review" class={`review-banner ${(pendingReviewCount ?? 0) > 0 ? 'alert' : 'quiet'}`}>
+      <span class="rb-icon">📸</span>
+      <span class="rb-body">
+        <span class="rb-title">
+          {pendingReviewCount && pendingReviewCount > 0
+            ? `${pendingReviewCount} contributor photo${pendingReviewCount === 1 ? '' : 's'} awaiting review`
+            : 'Contributor photo queue is empty'}
+        </span>
+        <span class="rb-sub">Parents and match photographers submit here — approve to publish.</span>
       </span>
-      <span class="rb-sub">Parents and match photographers submit here — approve to publish.</span>
-    </span>
-    <span class="rb-cta">Open review →</span>
-  </a>
+      <span class="rb-cta">Open review →</span>
+    </a>
+    <a href="/admin/gallery/contributors" class="review-banner quiet">
+      <span class="rb-icon">👤</span>
+      <span class="rb-body">
+        <span class="rb-title">Contributor accounts</span>
+        <span class="rb-sub">Create accounts for parents and photographers, reset passwords, enable/disable access.</span>
+      </span>
+      <span class="rb-cta">Manage →</span>
+    </a>
+  </div>
 
   <style>
+    .hub-banners { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    @media (max-width: 720px) { .hub-banners { grid-template-columns: 1fr; } }
     .review-banner {
       display: flex; align-items: center; gap: 16px;
-      padding: 14px 20px; margin-bottom: 20px;
+      padding: 14px 20px;
       border-radius: 8px; text-decoration: none;
       transition: background 0.15s;
     }

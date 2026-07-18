@@ -41,22 +41,17 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
         <div class="panel signin">
           <h2>Sign in</h2>
 
-          <div id="step-mobile" class="step-block">
-            <label for="mobile">Your mobile number</label>
-            <input id="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="0400 000 000" />
-            <p class="hint">We'll send you a six-digit code by text. Codes are one-time and expire after 10 minutes.</p>
-            <button type="button" id="request-code" class="btn primary">Send me a code</button>
-            <p id="mobile-error" class="err" hidden></p>
+          <div class="step-block">
+            <label for="email">Email</label>
+            <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="your.email@example.com" />
           </div>
 
-          <div id="step-code" class="step-block" hidden>
-            <label for="code">Enter the 6-digit code</label>
-            <input id="code" type="text" inputmode="numeric" pattern="\d{6}" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
-            <div class="btn-row">
-              <button type="button" id="verify-code" class="btn primary">Sign in</button>
-              <button type="button" id="back-to-mobile" class="btn ghost">Use a different number</button>
-            </div>
-            <p id="code-error" class="err" hidden></p>
+          <div class="step-block">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+            <p class="hint">Accounts are created by the club committee. If you need access, contact the club secretary.</p>
+            <button type="button" id="signin-btn" class="btn primary">Sign in</button>
+            <p id="signin-error" class="err" hidden></p>
           </div>
         </div>
       ) : (
@@ -64,7 +59,7 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
           <div class="signed-in">
             <div>
               <div class="hint">Signed in as</div>
-              <div class="mobile-line">{session.full_name ?? session.mobile}</div>
+              <div class="mobile-line">{session.full_name ?? session.email}</div>
             </div>
             <form method="post" action="/api/photos/logout">
               <button type="submit" class="btn ghost small">Sign out</button>
@@ -381,62 +376,34 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
 
 <script>
   // ── Sign-in flow ────────────────────────────────────────────────────
-  const stepMobile   = document.getElementById('step-mobile');
-  const stepCode     = document.getElementById('step-code');
-  const mobileInput  = document.getElementById('mobile') as HTMLInputElement | null;
-  const codeInput    = document.getElementById('code') as HTMLInputElement | null;
-  const reqBtn       = document.getElementById('request-code');
-  const verifyBtn    = document.getElementById('verify-code');
-  const backBtn      = document.getElementById('back-to-mobile');
-  const mobileErr    = document.getElementById('mobile-error');
-  const codeErr      = document.getElementById('code-error');
+  const emailInput    = document.getElementById('email') as HTMLInputElement | null;
+  const passwordInput = document.getElementById('password') as HTMLInputElement | null;
+  const signinBtn     = document.getElementById('signin-btn') as HTMLButtonElement | null;
+  const signinErr     = document.getElementById('signin-error');
 
-  reqBtn?.addEventListener('click', async () => {
-    if (!mobileInput || !mobileErr) return;
-    mobileErr.hidden = true; mobileErr.textContent = '';
-    (reqBtn as HTMLButtonElement).disabled = true;
-    (reqBtn as HTMLButtonElement).textContent = 'Sending…';
-    const res = await fetch('/api/photos/request-code', {
+  async function doSignIn() {
+    if (!emailInput || !passwordInput || !signinErr || !signinBtn) return;
+    signinErr.hidden = true; signinErr.textContent = '';
+    signinBtn.disabled = true;
+    signinBtn.textContent = 'Signing in…';
+    const res = await fetch('/api/photos/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile: mobileInput.value }),
+      body: JSON.stringify({ email: emailInput.value, password: passwordInput.value }),
     });
     const j = await res.json().catch(() => ({}));
-    (reqBtn as HTMLButtonElement).disabled = false;
-    (reqBtn as HTMLButtonElement).textContent = 'Send me a code';
+    signinBtn.disabled = false;
+    signinBtn.textContent = 'Sign in';
     if (!res.ok || !j.ok) {
-      mobileErr.textContent = j.error || 'Could not send code.';
-      mobileErr.hidden = false;
-      return;
-    }
-    if (stepMobile) stepMobile.hidden = true;
-    if (stepCode)   stepCode.hidden = false;
-    codeInput?.focus();
-  });
-
-  backBtn?.addEventListener('click', () => {
-    if (stepMobile) stepMobile.hidden = false;
-    if (stepCode)   stepCode.hidden = true;
-    if (codeInput) codeInput.value = '';
-  });
-
-  verifyBtn?.addEventListener('click', async () => {
-    if (!mobileInput || !codeInput || !codeErr) return;
-    codeErr.hidden = true; codeErr.textContent = '';
-    (verifyBtn as HTMLButtonElement).disabled = true;
-    (verifyBtn as HTMLButtonElement).textContent = 'Signing in…';
-    const res = await fetch('/api/photos/verify-code', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile: mobileInput.value, code: codeInput.value.trim() }),
-    });
-    const j = await res.json().catch(() => ({}));
-    (verifyBtn as HTMLButtonElement).disabled = false;
-    (verifyBtn as HTMLButtonElement).textContent = 'Sign in';
-    if (!res.ok || !j.ok) {
-      codeErr.textContent = j.error || 'Sign-in failed.';
-      codeErr.hidden = false;
+      signinErr.textContent = j.error || 'Sign-in failed.';
+      signinErr.hidden = false;
       return;
     }
     window.location.reload();
+  }
+
+  signinBtn?.addEventListener('click', doSignIn);
+  passwordInput?.addEventListener('keydown', e => {
+    if ((e as KeyboardEvent).key === 'Enter') doSignIn();
   });
 
   // ── Upload flow (only present when signed in) ───────────────────────
