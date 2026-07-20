@@ -16,11 +16,10 @@ const { data: fixturesRaw } = await db
   .limit(500);
 const fixtures = fixturesRaw ?? [];
 
-// Contributors only pick between Seniors and Juniors — a round then narrows
-// the choice to a specific Bulldog match.  Everything in `fixtures` right now
-// is senior-competition (A/B/SC/JC), but the split is future-proof for junior
-// competition data once that syncs.
-const SENIOR_GRADES = new Set(['a-grade', 'a grade', 'b grade', 'senior colts', 'junior colts']);
+// Two tiers, per the committee's classification:
+//   Seniors = A-Grade + B Grade (adult footy)
+//   Juniors = Senior Colts, Junior Colts, U11, U9, …  (everything else)
+const SENIOR_GRADES = new Set(['a-grade', 'a grade', 'b grade']);
 function tierOf(grade: string | null): 'seniors' | 'juniors' | null {
   if (!grade) return null;
   return SENIOR_GRADES.has(grade.toLowerCase()) ? 'seniors' : 'juniors';
@@ -486,7 +485,7 @@ const tierRoundsJson = JSON.stringify(tierRounds);
     for (const r of rounds) {
       const opt = document.createElement('option');
       opt.value = String(r.round);
-      opt.textContent = `Round ${r.round} · Wallaroo v ${r.opponent ?? 'tbc'}`;
+      opt.textContent = `Round ${r.round}  Wallaroo v ${r.opponent ?? 'tbc'}`;
       roundSel.appendChild(opt);
     }
     if (details) details.hidden = true;

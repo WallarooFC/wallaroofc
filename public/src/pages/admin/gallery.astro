@@ -49,14 +49,32 @@ const { count: pendingReviewCount } = await db
   .select('id', { count: 'exact', head: true })
   .eq('status', 'pending');
 
-// Round options for the selector — drawn from the fixtures so they match the
-// real season (falls back to 1–23 if fixtures aren't loaded).
+// Round options + tier grouping — pull opponent so the round labels can read
+// "Round 1  Wallaroo v CMS".
 const { data: fxRows } = await db
   .from('fixtures')
-  .select('round, season')
+  .select('round, season, grade, opponent')
   .not('round', 'is', null)
   .order('season', { ascending: false });
 const latestSeason: number = (fxRows ?? [])[0]?.season ?? 2026;
+
+// Committee's classification: Seniors = A/B Grade, Juniors = everything else.
+const SENIOR_GRADES = new Set(['a-grade', 'a grade', 'b grade']);
+type TierRound = { round: number; opponent: string | null };
+const tierRounds: Record<'seniors' | 'juniors', TierRound[]> = { seniors: [], juniors: [] };
+const seen: Record<'seniors' | 'juniors', Set<number>> = { seniors: new Set(), juniors: new Set() };
+for (const f of fxRows ?? []) {
+  if (f.season !== latestSeason || f.round == null) continue;
+  const tier: 'seniors' | 'juniors' = SENIOR_GRADES.has((f.grade ?? '').toLowerCase()) ? 'seniors' : 'juniors';
+  if (seen[tier].has(f.round)) continue;
+  seen[tier].add(f.round);
+  tierRounds[tier].push({ round: f.round as number, opponent: f.opponent ?? null });
+}
+tierRounds.seniors.sort((a, b) => a.round - b.round);
+tierRounds.juniors.sort((a, b) => a.round - b.round);
+const tierRoundsJson = JSON.stringify(tierRounds);
+
+// Legacy flat round list — kept for the edit modal + the gallery grouping.
 const roundOptions: number[] = (() => {
   const s = [...new Set((fxRows ?? [])
     .filter((f: any) => f.season === latestSeason)
@@ -141,7 +159,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     /* Batch meta */
     .batch-meta { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
     .batch-meta-heading { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 14px; }
-    .batch-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .batch-fields { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; }
     .field-group label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--admin-muted); margin-bottom: 5px; }
     .field-group select, .field-group input[type="number"], .field-group input[type="text"] { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 4px; padding: 8px 10px; font-size: 13px; }
 
@@ -227,15 +245,23 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
     <div class="batch-meta">
       <p class="batch-meta-heading">Batch metadata — applies to all photos in this upload</p>
+      <script id="tier-rounds-data" type="application/json" set:html={tierRoundsJson}></script>
       <div class="batch-fields">
         <div class="field-group">
-          <label>Round <span style="color:var(--admin-red)">*</span></label>
-          <select id="batch-round" required>
-            <option value="">— select round —</option>
-            {roundOptions.map(r => <option value={r}>Round {r}</option>)}
+          <label>Grade <span style="color:var(--admin-red)">*</span></label>
+          <select id="batch-tier" required>
+            <option value="">— select —</option>
+            <option value="seniors">Seniors</option>
+            <option value="juniors">Juniors</option>
           </select>
         </div>
         <div class="field-group">
+          <label>Round <span style="color:var(--admin-red)">*</span></label>
+          <select id="batch-round" required disabled>
+            <option value="">Pick a grade first…</option>
+          </select>
+        </div>
+        <div class="field-group" style="grid-column: 1 / -1">
           <label>Season</label>
           <input type="number" id="batch-season" value={latestSeason} min="2020" max="2040" />
         </div>
@@ -520,6 +546,41 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
     clearBtn.addEventListener('click', () => { files = []; renderQueue(); });
 
+    // ── Grade → Round cascade ─────────────────────────────────────────────
+    type TierRound = { round: number; opponent: string | null };
+    type TierRounds = { seniors: TierRound[]; juniors: TierRound[] };
+    const trEl = document.getElementById('tier-rounds-data');
+    const TIER_ROUNDS: TierRounds = trEl?.textContent
+      ? JSON.parse(trEl.textContent)
+      : { seniors: [], juniors: [] };
+    const batchTierEl  = document.getElementById('batch-tier')  as HTMLSelectElement | null;
+    const batchRoundEl = document.getElementById('batch-round') as HTMLSelectElement | null;
+    batchTierEl?.addEventListener('change', () => {
+      if (!batchRoundEl) return;
+      const t = batchTierEl.value as 'seniors' | 'juniors' | '';
+      batchRoundEl.innerHTML = '';
+      if (!t) {
+        batchRoundEl.disabled = true;
+        const opt = document.createElement('option');
+        opt.value = ''; opt.textContent = 'Pick a grade first…';
+        batchRoundEl.appendChild(opt);
+        return;
+      }
+      const rounds = TIER_ROUNDS[t] ?? [];
+      batchRoundEl.disabled = rounds.length === 0;
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = rounds.length === 0 ? 'No rounds available for this grade' : '— select round —';
+      batchRoundEl.appendChild(ph);
+      for (const r of rounds) {
+        const opt = document.createElement('option');
+        opt.value = String(r.round);
+        opt.setAttribute('data-opp', r.opponent ?? '');
+        opt.textContent = `Round ${r.round}  Wallaroo v ${r.opponent ?? 'tbc'}`;
+        batchRoundEl.appendChild(opt);
+      }
+    });
+
     // ── Upload handler ────────────────────────────────────────────────────────
     uploadBtn.addEventListener('click', async () => {
       if (!files.length) { showToast('No files selected', 'error'); return; }
@@ -527,9 +588,16 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       const token = getAccessToken();
       if (!token) { showToast('Not signed in — please sign in again', 'error'); return; }
 
-      const round  = (document.getElementById('batch-round')  as HTMLSelectElement).value;
+      const tierSelEl   = document.getElementById('batch-tier')  as HTMLSelectElement;
+      const roundSelEl  = document.getElementById('batch-round') as HTMLSelectElement;
+      const round  = roundSelEl.value;
+      const tier   = tierSelEl.value;
+      const roundOpt = roundSelEl.selectedOptions[0];
+      const opponent = roundOpt?.getAttribute('data-opp') ?? '';
+      const gradeLabel = tier === 'seniors' ? 'Seniors' : tier === 'juniors' ? 'Juniors' : '';
       const season = parseInt((document.getElementById('batch-season') as HTMLInputElement).value) || 2026;
 
+      if (!tier)  { showToast('Pick a grade before uploading', 'error'); return; }
       if (!round) { showToast('Pick a round before uploading', 'error'); return; }
 
       uploadBtn.disabled       = true;
@@ -547,10 +615,11 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           await insertRow({
             season,
             round:         round ? parseInt(round) : null,
+            grade:         gradeLabel || null,
             url,
             storage_path:  path,
-            alt:           '',
-            caption:       '',
+            alt:           opponent ? `Wallaroo v ${opponent}` : '',
+            caption:       opponent ? `Round ${round}  Wallaroo v ${opponent}` : `Round ${round}`,
             display_order: 0,
             published:     true,
           }, token);
