@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
-import AdminLayout from '../../layouts/AdminLayout.astro';
-import { getAdminClient } from '../../lib/supabase';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../../lib/supabase';
 
 const db = getAdminClient();
 
