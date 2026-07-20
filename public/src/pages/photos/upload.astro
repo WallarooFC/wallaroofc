@@ -1,0 +1,555 @@
+---
+export const prerender = false;
+import PageLayout from '../../layouts/PageLayout.astro';
+import { getAdminClient } from '../../lib/supabase';
+import { getSession } from '../../lib/photo-hub';
+
+const db = getAdminClient();
+const session = await getSession(Astro.cookies);
+
+// Load season fixtures so the round picker can show the opponent per round.
+const { data: fixturesRaw } = await db
+  .from('fixtures')
+  .select('id, season, round, grade, match_date, match_time, venue, opponent, is_home')
+  .eq('season', 2026)
+  .order('round', { ascending: true })
+  .limit(500);
+const fixtures = fixturesRaw ?? [];
+
+// All Bulldog grades play the same opponent on a given round, so we only
+// need one opponent per round.  Grade (Seniors / Juniors) is a label the
+// contributor tags the batch with — it doesn't change which rounds appear.
+type Round = {
+  round:      number;
+  opponent:   string | null;
+  venue:      string | null;
+  match_date: string | null;
+  fixture_id: string | null;
+};
+const seenRound = new Set<number>();
+const seasonRounds: Round[] = [];
+for (const f of fixtures) {
+  if (f.round == null || seenRound.has(f.round)) continue;
+  seenRound.add(f.round);
+  seasonRounds.push({
+    round:      f.round,
+    opponent:   f.opponent ?? null,
+    venue:      f.venue ?? null,
+    match_date: f.match_date ?? null,
+    fixture_id: f.id ?? null,
+  });
+}
+seasonRounds.sort((a, b) => a.round - b.round);
+const seasonRoundsJson = JSON.stringify(seasonRounds);
+---
+<PageLayout
+  title="Contribute Photos · Wallaroo FC"
+  description="Match photographers upload here — sign in with your mobile, pick the match, drag your photos over. The club approves before publishing."
+>
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">Media Contributor</div>
+      <h1>Send in your <span class="ital">match photos.</span></h1>
+      <p class="lead">
+        Photographers approved by the club can upload directly to the Wallaroo FC gallery.
+        Sign in with your mobile, choose the match, drag your photos across. The Committee
+        checks every photo before it appears on the site.
+      </p>
+    </div>
+  </section>
+
+  <section class="body">
+    <div class="body-inner">
+
+      {!session ? (
+        <div class="panel signin">
+          <h2>Sign in</h2>
+
+          <div class="step-block">
+            <label for="email">Email</label>
+            <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="your.email@example.com" />
+          </div>
+
+          <div class="step-block">
+            <label for="password">Password</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+            <p class="hint">Accounts are created by the club committee. If you need access, contact the club secretary.</p>
+            <button type="button" id="signin-btn" class="btn primary">Sign in</button>
+            <p id="signin-error" class="err" hidden></p>
+          </div>
+        </div>
+      ) : (
+        <div class="panel">
+          <div class="signed-in">
+            <div>
+              <div class="hint">Signed in as</div>
+              <div class="mobile-line">{session.full_name ?? session.email}</div>
+            </div>
+            <form method="post" action="/api/photos/logout">
+              <button type="submit" class="btn ghost small">Sign out</button>
+            </form>
+          </div>
+
+          <hr />
+
+          <h2>Choose the round</h2>
+          <script id="season-rounds-data" type="application/json" set:html={seasonRoundsJson}></script>
+          <div class="fixture-picker">
+            <div class="pill-row">
+              <label>
+                <span>Grade</span>
+                <select id="tier">
+                  <option value="">— select —</option>
+                  <option value="seniors">Seniors</option>
+                  <option value="juniors">Juniors</option>
+                </select>
+              </label>
+              <label>
+                <span>Round</span>
+                <select id="round-select">
+                  <option value="">Pick a round…</option>
+                  {seasonRounds.map(r => (
+                    <option value={r.round}>
+                      Round {r.round} Wallaroo v {r.opponent ?? 'tbc'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div id="fixture-details" class="fixture-details" hidden>
+              <div><span class="det-label">Grade</span><span id="d-grade">—</span></div>
+              <div><span class="det-label">Round</span><span id="d-round">—</span></div>
+              <div><span class="det-label">Match</span><span id="d-match">—</span></div>
+              <div><span class="det-label">Venue</span><span id="d-venue">—</span></div>
+              <div><span class="det-label">Date</span><span id="d-date">—</span></div>
+            </div>
+          </div>
+
+          <h2>Drop your photos</h2>
+          <div id="dropzone" class="dropzone">
+            <input id="file-input" type="file" accept="image/*" multiple hidden />
+            <div class="dropzone-inner">
+              <div class="drop-icon">⇑</div>
+              <div class="drop-title">Drag photos here</div>
+              <div class="drop-sub">or click to pick from your computer. Up to 200 photos per batch.</div>
+            </div>
+          </div>
+
+          <div id="file-list" class="file-list" hidden></div>
+
+          <label class="consent">
+            <input id="consent" type="checkbox" />
+            <span>
+              I confirm the photos I'm uploading are mine to share, they don't include any children whose
+              parents have asked not to be photographed, and I understand the club chooses which will appear
+              on the public site.
+            </span>
+          </label>
+
+          <p class="note-field">
+            <label for="batch-note">Optional note to the moderator</label>
+            <textarea id="batch-note" rows="2" placeholder="e.g. Round 12 U11s home game — plenty of action shots from the last quarter."></textarea>
+          </p>
+
+          <div class="submit-row">
+            <button id="submit-btn" class="btn primary big" disabled>Submit to Club</button>
+            <span id="submit-status" class="submit-status"></span>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+
+</PageLayout>
+
+<style>
+  .hero {
+    background: linear-gradient(180deg, var(--blue-darkest) 0%, var(--blue-deep) 100%);
+    color: var(--white);
+    padding: 100px 32px 60px;
+    border-bottom: 4px solid var(--red);
+  }
+  .hero-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+  .eyebrow {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 14px;
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(44px, 8vw, 96px);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    line-height: 0.95;
+  }
+  .hero h1 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+  .lead {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .body { background: var(--cream); padding: 60px 24px 100px; }
+  .body-inner { max-width: 900px; margin: 0 auto; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 32px 36px;
+    box-shadow: 0 4px 24px rgba(10,31,61,0.06);
+  }
+  .panel h2 {
+    font-family: var(--display);
+    font-size: clamp(24px, 3vw, 32px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 18px;
+  }
+  .signin { max-width: 480px; margin: 0 auto; }
+
+  label {
+    font-family: var(--headline);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--grey);
+    display: block;
+    margin-bottom: 8px;
+  }
+  input[type=tel], input[type=text], input[type=email], select, textarea {
+    width: 100%;
+    background: var(--white);
+    border: 1px solid var(--line);
+    color: var(--charcoal);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-family: var(--body);
+    font-size: 16px;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--red); }
+  #code { text-align: center; letter-spacing: 0.4em; font-family: var(--display); font-size: 24px; }
+
+  .btn {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 22px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .btn.primary { background: var(--red); color: var(--white); border-color: var(--red); }
+  .btn.primary:hover { background: var(--red-deep); border-color: var(--red-deep); }
+  .btn.primary:disabled { background: var(--grey); border-color: var(--grey); cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--blue-deep); border-color: var(--blue-deep); }
+  .btn.ghost:hover { background: var(--blue-deep); color: var(--white); }
+  .btn.ghost.small { padding: 6px 12px; font-size: 11px; }
+  .btn.big { padding: 16px 32px; font-size: 15px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  .step-block { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .step-block .btn { margin-top: 16px; align-self: flex-start; }
+  .hint { font-family: var(--serif); font-size: 13px; color: var(--grey); font-style: italic; margin: 0; }
+  .err { font-family: var(--body); font-size: 13px; color: var(--red); margin: 8px 0 0; }
+
+  .signed-in {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 16px; margin-bottom: 12px;
+  }
+  .mobile-line { font-family: var(--display); font-size: 20px; color: var(--blue-deep); letter-spacing: 0.02em; }
+
+  hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+
+  .fixture-picker { margin-bottom: 32px; }
+  .pill-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 14px; }
+  .pill-row label { display: flex; flex-direction: column; margin: 0; }
+  .pill-row label span { margin-bottom: 6px; }
+
+  .fixture-details {
+    background: var(--cream);
+    border-left: 3px solid var(--red);
+    padding: 14px 18px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px 20px;
+    border-radius: 0 4px 4px 0;
+  }
+  .fixture-details > div { display: flex; flex-direction: column; }
+  .det-label {
+    font-family: var(--headline);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+  .fixture-details > div > span:last-child { font-family: var(--body); font-size: 14px; color: var(--charcoal); }
+
+  .dropzone {
+    background: rgba(200,16,46,0.03);
+    border: 2px dashed rgba(200,16,46,0.4);
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    margin-bottom: 20px;
+  }
+  .dropzone:hover, .dropzone.drag {
+    background: rgba(200,16,46,0.07);
+    border-color: var(--red);
+  }
+  .drop-icon {
+    font-family: var(--display);
+    font-size: 48px;
+    color: var(--red);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .drop-title {
+    font-family: var(--display);
+    font-size: 22px;
+    color: var(--blue-deep);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .drop-sub { font-family: var(--serif); font-size: 14px; color: var(--grey); font-style: italic; }
+
+  .file-list {
+    background: var(--cream);
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    max-height: 260px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .file-list .file-chip {
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 4px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .file-chip img { width: 100%; height: 90px; object-fit: cover; border-radius: 3px; }
+  .file-chip .fname {
+    font-family: var(--body);
+    font-size: 10px;
+    color: var(--grey);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .consent {
+    display: flex;
+    gap: 12px;
+    background: var(--cream);
+    padding: 14px 18px;
+    border-radius: 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--serif);
+    font-size: 14px;
+    color: var(--charcoal);
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+  .consent input { margin-top: 4px; flex-shrink: 0; width: 18px; height: 18px; }
+
+  .note-field textarea { margin-top: 6px; }
+  .note-field label { display: block; margin-bottom: 4px; }
+
+  .submit-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .submit-status { font-family: var(--serif); font-size: 14px; color: var(--grey); }
+
+  @media (max-width: 640px) {
+    .panel { padding: 24px 22px; }
+    .pill-row { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  // ── Sign-in flow ────────────────────────────────────────────────────
+  const emailInput    = document.getElementById('email') as HTMLInputElement | null;
+  const passwordInput = document.getElementById('password') as HTMLInputElement | null;
+  const signinBtn     = document.getElementById('signin-btn') as HTMLButtonElement | null;
+  const signinErr     = document.getElementById('signin-error');
+
+  async function doSignIn() {
+    if (!emailInput || !passwordInput || !signinErr || !signinBtn) return;
+    signinErr.hidden = true; signinErr.textContent = '';
+    signinBtn.disabled = true;
+    signinBtn.textContent = 'Signing in…';
+    const res = await fetch('/api/photos/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailInput.value, password: passwordInput.value }),
+    });
+    const j = await res.json().catch(() => ({}));
+    signinBtn.disabled = false;
+    signinBtn.textContent = 'Sign in';
+    if (!res.ok || !j.ok) {
+      signinErr.textContent = j.error || 'Sign-in failed.';
+      signinErr.hidden = false;
+      return;
+    }
+    window.location.reload();
+  }
+
+  signinBtn?.addEventListener('click', doSignIn);
+  passwordInput?.addEventListener('keydown', e => {
+    if ((e as KeyboardEvent).key === 'Enter') doSignIn();
+  });
+
+  // ── Upload flow (only present when signed in) ───────────────────────
+  type Round = { round: number; opponent: string | null; venue: string | null; match_date: string | null; fixture_id: string | null };
+  const seasonRoundsEl = document.getElementById('season-rounds-data');
+  const SEASON_ROUNDS: Round[] = seasonRoundsEl?.textContent
+    ? JSON.parse(seasonRoundsEl.textContent)
+    : [];
+  const TIER_LABEL: Record<string, string> = { seniors: 'Seniors', juniors: 'Juniors' };
+
+  const tierSel   = document.getElementById('tier') as HTMLSelectElement | null;
+  const roundSel  = document.getElementById('round-select') as HTMLSelectElement | null;
+  const details   = document.getElementById('fixture-details');
+  const dropzone  = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
+  const fileList  = document.getElementById('file-list');
+  const consent   = document.getElementById('consent') as HTMLInputElement | null;
+  const submit    = document.getElementById('submit-btn') as HTMLButtonElement | null;
+  const status    = document.getElementById('submit-status');
+  const note      = document.getElementById('batch-note') as HTMLTextAreaElement | null;
+
+  let selectedFiles: File[] = [];
+  let currentRound: Round | null = null;
+  let currentTier: 'seniors' | 'juniors' | null = null;
+
+  function updateSubmit() {
+    if (!submit) return;
+    submit.disabled = !(currentTier && currentRound && consent?.checked && selectedFiles.length > 0);
+  }
+
+  function refreshDetails() {
+    if (!details) return;
+    if (!currentTier || !currentRound) { details.hidden = true; return; }
+    (document.getElementById('d-grade') as HTMLElement).textContent = TIER_LABEL[currentTier];
+    (document.getElementById('d-round') as HTMLElement).textContent = `Round ${currentRound.round}`;
+    (document.getElementById('d-match') as HTMLElement).textContent = `Wallaroo v ${currentRound.opponent ?? 'tbc'}`;
+    (document.getElementById('d-venue') as HTMLElement).textContent = currentRound.venue ?? '—';
+    (document.getElementById('d-date')  as HTMLElement).textContent = currentRound.match_date ?? '—';
+    details.hidden = false;
+  }
+
+  tierSel?.addEventListener('change', () => {
+    const t = tierSel.value as 'seniors' | 'juniors' | '';
+    currentTier = t || null;
+    refreshDetails();
+    updateSubmit();
+  });
+
+  roundSel?.addEventListener('change', () => {
+    if (!roundSel) return;
+    const roundNum = parseInt(roundSel.value, 10);
+    currentRound = roundNum ? SEASON_ROUNDS.find(r => r.round === roundNum) ?? null : null;
+    refreshDetails();
+    updateSubmit();
+  });
+
+  consent?.addEventListener('change', updateSubmit);
+
+  function renderFileList() {
+    if (!fileList) return;
+    fileList.innerHTML = '';
+    if (selectedFiles.length === 0) { fileList.hidden = true; return; }
+    fileList.hidden = false;
+    for (const f of selectedFiles) {
+      const chip = document.createElement('div');
+      chip.className = 'file-chip';
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const name = document.createElement('span');
+      name.className = 'fname';
+      name.textContent = f.name;
+      chip.appendChild(img);
+      chip.appendChild(name);
+      fileList.appendChild(chip);
+    }
+  }
+
+  function addFiles(files: FileList | File[]) {
+    for (const f of Array.from(files)) {
+      if (f.type.startsWith('image/')) selectedFiles.push(f);
+    }
+    renderFileList();
+    updateSubmit();
+  }
+
+  dropzone?.addEventListener('click', () => fileInput?.click());
+  fileInput?.addEventListener('change', () => fileInput.files && addFiles(fileInput.files));
+  ['dragover','dragenter'].forEach(evt => dropzone?.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(evt => dropzone?.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+  }));
+  dropzone?.addEventListener('drop', e => {
+    const dt = (e as DragEvent).dataTransfer;
+    if (dt?.files) addFiles(dt.files);
+  });
+
+  submit?.addEventListener('click', async () => {
+    if (!currentTier || !currentRound || !status) return;
+    submit.disabled = true;
+    submit.textContent = 'Uploading…';
+    status.textContent = `Uploading ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`;
+
+    const fd = new FormData();
+    fd.append('fixture_id', currentRound.fixture_id ?? '');
+    fd.append('round',      String(currentRound.round));
+    fd.append('grade',      TIER_LABEL[currentTier]);
+    fd.append('opponent',   currentRound.opponent  ?? '');
+    fd.append('venue',      currentRound.venue     ?? '');
+    fd.append('match_date', currentRound.match_date ?? '');
+    fd.append('note',       note?.value ?? '');
+    fd.append('consent_ack','true');
+    for (const f of selectedFiles) fd.append('files', f, f.name);
+
+    const res = await fetch('/api/photos/upload', { method: 'POST', body: fd });
+    const j = await res.json().catch(() => ({}));
+    submit.textContent = 'Submit to Club';
+    if (!res.ok || !j.ok) {
+      status.textContent = j.error || 'Upload failed.';
+      submit.disabled = false;
+      return;
+    }
+    status.textContent = `Uploaded ${j.uploaded} of ${selectedFiles.length}. Committee will review shortly.`;
+    selectedFiles = [];
+    renderFileList();
+    if (fileInput) fileInput.value = '';
+    if (consent) consent.checked = false;
+    updateSubmit();
+  });
+</script>

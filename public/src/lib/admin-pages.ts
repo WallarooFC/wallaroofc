@@ -9,7 +9,6 @@ export const ADMIN_PAGES = [
   { key: 'fixtures',       label: 'Fixtures',             icon: '📅' },
   { key: 'roster',         label: 'Bar Roster',           icon: '🍺' },
   { key: 'canteen',        label: 'Canteen Roster',       icon: '🥘' },
-  { key: 'sponsors',       label: 'Sponsors (Public)',    icon: '🤝' },
   { key: 'sponsor-register', label: 'Sponsor Register',   icon: '💼' },
   { key: 'news',           label: 'News',                 icon: '📰' },
   { key: 'takeovers',      label: 'Announcements',        icon: '📣' },

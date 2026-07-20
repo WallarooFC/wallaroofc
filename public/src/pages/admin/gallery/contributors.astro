@@ -1,0 +1,260 @@
+---
+export const prerender = false;
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../../lib/supabase';
+import { hashPassword, normaliseEmail } from '../../../lib/photo-hub';
+
+const db = getAdminClient();
+let flash: { kind: 'ok' | 'err'; text: string } | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form   = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  if (action === 'create') {
+    const name  = String(form.get('full_name') ?? '').trim();
+    const email = normaliseEmail(String(form.get('email') ?? ''));
+    const pass  = String(form.get('password') ?? '');
+    if (!email) flash = { kind: 'err', text: 'Enter a valid email address.' };
+    else if (pass.length < 8) flash = { kind: 'err', text: 'Password must be at least 8 characters.' };
+    else {
+      const { data: existing } = await db.from('photo_contributors')
+        .select('id').ilike('email', email).maybeSingle();
+      if (existing) flash = { kind: 'err', text: 'A contributor with that email already exists.' };
+      else {
+        const hash = await hashPassword(pass);
+        const { error } = await db.from('photo_contributors').insert({
+          full_name: name || null, email, password_hash: hash,
+          is_active: true, is_approved: true,
+        });
+        flash = error ? { kind: 'err', text: error.message } : { kind: 'ok', text: `Contributor ${email} created.` };
+      }
+    }
+  }
+
+  if (action === 'reset_password') {
+    const id   = String(form.get('id') ?? '');
+    const pass = String(form.get('password') ?? '');
+    if (pass.length < 8) flash = { kind: 'err', text: 'Password must be at least 8 characters.' };
+    else {
+      const hash = await hashPassword(pass);
+      const { error } = await db.from('photo_contributors').update({ password_hash: hash }).eq('id', id);
+      flash = error ? { kind: 'err', text: error.message } : { kind: 'ok', text: 'Password reset.' };
+    }
+  }
+
+  if (action === 'toggle_active') {
+    const id = String(form.get('id') ?? '');
+    const { data: row } = await db.from('photo_contributors').select('is_active').eq('id', id).single();
+    await db.from('photo_contributors').update({ is_active: !row?.is_active }).eq('id', id);
+    flash = { kind: 'ok', text: row?.is_active ? 'Contributor disabled.' : 'Contributor enabled.' };
+  }
+
+  if (action === 'delete') {
+    const id = String(form.get('id') ?? '');
+    // Any active sessions are cascade-deleted by the FK.
+    await db.from('photo_contributors').delete().eq('id', id);
+    flash = { kind: 'ok', text: 'Contributor removed.' };
+  }
+}
+
+const { data: contributors } = await db
+  .from('photo_contributors')
+  .select('id, email, full_name, is_active, is_approved, last_login_at, created_at')
+  .order('created_at', { ascending: false });
+
+// Compute per-contributor submission counts client-side (no RPC needed).
+const { data: submissions } = await db
+  .from('photo_submissions')
+  .select('contributor_id, status');
+const countBy = new Map<string, { total: number; approved: number; pending: number }>();
+for (const s of submissions ?? []) {
+  const c = countBy.get(s.contributor_id) ?? { total: 0, approved: 0, pending: 0 };
+  c.total++;
+  if (s.status === 'approved') c.approved++;
+  if (s.status === 'pending')  c.pending++;
+  countBy.set(s.contributor_id, c);
+}
+---
+<AdminLayout title="Photo Contributors">
+  <div class="section-label">Media Hub · Contributor accounts</div>
+
+  {flash && (
+    <div class={`flash ${flash.kind === 'ok' ? 'flash-ok' : 'flash-err'}`}>
+      {flash.text}
+    </div>
+  )}
+
+  <div class="page-head">
+    <div>
+      <h1>Contributors</h1>
+      <p class="page-sub">Parents and photographers approved to submit match photos via <a href="/photos/upload" target="_blank">/photos/upload</a>.</p>
+    </div>
+    <div class="head-actions">
+      <a href="/admin/gallery/review" class="btn ghost">Open review queue →</a>
+      <a href="/admin/gallery" class="btn ghost">← Back to gallery</a>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2>Add a contributor</h2>
+    <form method="post" class="create-form">
+      <input type="hidden" name="action" value="create" />
+      <div class="row-3">
+        <label>Full name<input name="full_name" placeholder="Jane Smith" /></label>
+        <label>Email *<input name="email" type="email" required placeholder="jane@example.com" /></label>
+        <label>Password *<input name="password" type="text" required minlength="8" placeholder="At least 8 characters" /></label>
+      </div>
+      <div class="row-right">
+        <button type="submit" class="btn primary">Create account</button>
+      </div>
+      <p class="hint">Share the password with the contributor directly — text, phone or in person. They can start uploading straight away.</p>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Existing contributors <span class="dim">({contributors?.length ?? 0})</span></h2>
+    {(!contributors || contributors.length === 0) ? (
+      <div class="empty">No contributors yet.  Add one above to get started.</div>
+    ) : (
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Uploads</th>
+            <th>Last login</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {contributors.map(c => {
+            const counts = countBy.get(c.id) ?? { total: 0, approved: 0, pending: 0 };
+            return (
+              <tr class={!c.is_active ? 'row-off' : ''}>
+                <td>{c.full_name ?? <span class="mute">—</span>}</td>
+                <td class="mono">{c.email}</td>
+                <td class="mono">
+                  {counts.total}
+                  {counts.pending > 0 && <span class="pending-pill">{counts.pending} pending</span>}
+                </td>
+                <td class="mono">{c.last_login_at ? new Date(c.last_login_at).toLocaleDateString('en-AU') : '—'}</td>
+                <td>
+                  {c.is_active
+                    ? <span class="badge on">Active</span>
+                    : <span class="badge off">Disabled</span>}
+                </td>
+                <td class="row-actions">
+                  <button type="button" class="btn-mini" data-reset={c.id} data-email={c.email}>Reset password</button>
+                  <form method="post" style="display:inline">
+                    <input type="hidden" name="action" value="toggle_active" />
+                    <input type="hidden" name="id"     value={c.id} />
+                    <button type="submit" class="btn-mini">{c.is_active ? 'Disable' : 'Enable'}</button>
+                  </form>
+                  <form method="post" style="display:inline" onsubmit={`return confirm('Remove ${c.email}? This deletes any pending submissions.');`}>
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id"     value={c.id} />
+                    <button type="submit" class="btn-mini danger">Remove</button>
+                  </form>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </section>
+
+  <!-- Reset password modal -->
+  <div id="reset-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <button class="modal-close" onclick="document.getElementById('reset-modal').style.display='none'">✕</button>
+      <h3>Reset password</h3>
+      <p class="modal-sub">For <strong id="reset-email"></strong></p>
+      <form method="post">
+        <input type="hidden" name="action" value="reset_password" />
+        <input type="hidden" name="id" id="reset-id" />
+        <label>New password
+          <input name="password" type="text" required minlength="8" placeholder="At least 8 characters" />
+        </label>
+        <div class="row-right">
+          <button type="button" class="btn ghost" onclick="document.getElementById('reset-modal').style.display='none'">Cancel</button>
+          <button type="submit" class="btn primary">Reset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</AdminLayout>
+
+<style>
+  .section-label { font-family: var(--headline, sans-serif); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--admin-muted); margin: 24px 0 12px; }
+  .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+  .page-head h1 { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 0.04em; margin: 0; }
+  .page-head .page-sub { font-size: 13px; color: var(--admin-muted); margin: 4px 0 0; }
+  .page-head a { color: #C8102E; text-decoration: none; }
+  .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .flash { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
+  .flash-ok  { background: rgba(46,200,80,0.1); border: 1px solid rgba(46,200,80,0.3); color: #6EE7B7; }
+  .flash-err { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+
+  .btn { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 0.08em; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; border: none; display: inline-block; }
+  .btn.primary { background: #C8102E; color: white; }
+  .btn.primary:hover { background: #a00e26; }
+  .btn.ghost { background: transparent; color: var(--admin-muted); border: 1px solid var(--admin-border); }
+  .btn.ghost:hover { color: var(--admin-text); border-color: var(--admin-text); }
+
+  .panel { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px; padding: 22px 24px; margin-bottom: 22px; }
+  .panel h2 { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.05em; margin: 0 0 14px; }
+  .panel .dim { color: var(--admin-muted); font-size: 13px; font-weight: 400; }
+
+  .create-form label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--admin-muted); }
+  .create-form input { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 5px; padding: 8px 12px; font-size: 13px; margin-top: 4px; font-family: inherit; }
+  .create-form input:focus { outline: none; border-color: #C8102E; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .row-right { display: flex; justify-content: flex-end; }
+  .hint { font-size: 12px; color: var(--admin-muted); font-style: italic; margin: 8px 0 0; }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { background: rgba(0,0,0,0.2); padding: 9px 12px; text-align: left; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--admin-muted); border-bottom: 1px solid var(--admin-border); }
+  .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--admin-border); }
+  .data-table tr.row-off { opacity: 0.5; }
+  .mono { font-family: monospace; font-size: 12px; }
+  .mute { color: var(--admin-muted); font-style: italic; }
+  .badge { padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  .badge.on { background: rgba(46,200,80,0.15); color: #6EE7B7; }
+  .badge.off { background: rgba(255,255,255,0.08); color: var(--admin-muted); }
+  .pending-pill { margin-left: 8px; background: rgba(239,68,68,0.15); color: #FCA5A5; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-mini { background: transparent; border: 1px solid var(--admin-border); color: var(--admin-muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: inherit; }
+  .btn-mini:hover { color: var(--admin-text); border-color: var(--admin-text); }
+  .btn-mini.danger:hover { color: #f87171; border-color: rgba(239,68,68,0.4); }
+
+  .empty { padding: 24px; text-align: center; color: var(--admin-muted); font-style: italic; font-size: 13px; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 10px; padding: 24px 28px; width: 440px; max-width: 95vw; position: relative; }
+  .modal h3 { font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.04em; margin: 0 0 6px; }
+  .modal-sub { font-size: 13px; color: var(--admin-muted); margin: 0 0 16px; }
+  .modal label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--admin-muted); }
+  .modal input { width: 100%; background: var(--admin-bg); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 5px; padding: 8px 12px; font-size: 13px; margin-top: 4px; font-family: inherit; }
+  .modal .row-right { gap: 8px; margin-top: 14px; }
+  .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--admin-muted); font-size: 18px; cursor: pointer; }
+</style>
+
+<script>
+  const modal = document.getElementById('reset-modal');
+  document.querySelectorAll<HTMLButtonElement>('[data-reset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-reset');
+      const email = btn.getAttribute('data-email');
+      const idInput = document.getElementById('reset-id') as HTMLInputElement | null;
+      const emailSp = document.getElementById('reset-email');
+      if (idInput) idInput.value = id ?? '';
+      if (emailSp) emailSp.textContent = email ?? '';
+      if (modal) modal.style.display = 'flex';
+    });
+  });
+</script>

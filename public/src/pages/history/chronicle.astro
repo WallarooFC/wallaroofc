@@ -1,0 +1,226 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import { CHRONICLE } from '../../lib/club-history.ts';
+
+// Group entries by decade for the navigation rail.
+type Bucket = { decade: string; startYear: number; count: number; slug: string };
+const buckets: Bucket[] = [];
+const decadeMap = new Map<number, Bucket>();
+for (const e of CHRONICLE) {
+  if (!e.year) continue;
+  const dec = Math.floor(e.year / 10) * 10;
+  if (!decadeMap.has(dec)) {
+    const b: Bucket = { decade: `${dec}s`, startYear: dec, count: 0, slug: `d${dec}` };
+    decadeMap.set(dec, b);
+    buckets.push(b);
+  }
+  decadeMap.get(dec)!.count++;
+}
+buckets.sort((a, b) => a.startYear - b.startYear);
+
+// Group entries under their decade for rendering.
+type DecadeGroup = { decade: string; slug: string; entries: typeof CHRONICLE };
+const groups: DecadeGroup[] = buckets.map(b => ({
+  decade: b.decade,
+  slug:   b.slug,
+  entries: CHRONICLE.filter(e => e.year && Math.floor(e.year / 10) * 10 === b.startYear),
+}));
+
+const totalEntries = CHRONICLE.length;
+const yearsSpanned = `${CHRONICLE[0]?.year ?? 1884} – ${CHRONICLE[CHRONICLE.length - 1]?.year ?? 1967}`;
+---
+<PageLayout
+  title="Club Chronicle 1884–1967 · Wallaroo FC"
+  description="Every recorded meeting, match, milestone and moment in the life of Wallaroo Football Club from 1884 to 1967. Transcribed from the club's newspaper archive."
+>
+  <PageHero
+    eyebrow="Club Chronicle"
+    title="Eighty-three years,"
+    titleItalic="in their own words."
+    intro={`${totalEntries} entries transcribed from the club archive, spanning ${yearsSpanned} — meetings, matches, presentations, premierships, and the men who made the Bulldogs what they are today.`}
+  />
+
+  <!-- Decade jump rail -->
+  <section class="rail">
+    <div class="container wide">
+      <div class="eyebrow">Jump to a decade</div>
+      <div class="rail-pills">
+        {buckets.map(b => (
+          <a href={`#${b.slug}`} class="rail-pill">
+            <span class="rail-year">{b.decade}</span>
+            <span class="rail-count">{b.count} entries</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Chronicle body -->
+  <section class="chronicle">
+    <div class="container narrow">
+      {groups.map(g => (
+        <div class="decade-block" id={g.slug}>
+          <h2 class="decade-h">{g.decade}</h2>
+          <div class="timeline">
+            {g.entries.map(e => (
+              <article class="entry">
+                <header class="entry-date">{e.date}</header>
+                <p class="entry-body">{e.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- Source / attribution -->
+  <section class="source">
+    <div class="container narrow">
+      <div class="eyebrow">The Source</div>
+      <h3>Newspaper transcripts, hand-typed and preserved.</h3>
+      <p>
+        Every entry above was compiled from contemporary reports in the <em>Wallaroo Times</em>,
+        the <em>People's Weekly</em>, the <em>Kadina and Wallaroo Times</em> and the
+        <em>Yorke's Peninsula Advertiser</em>, transcribed page-by-page from the club's archive.
+      </p>
+      <p>
+        Original spelling, punctuation and occasional typographic quirks have been preserved
+        from the source papers — the Bulldog Rev. A.I. Brown really did play in the 1925
+        premiership. Corrections are always welcome; email
+        <a href="mailto:admin@wallaroofc.com.au">admin@wallaroofc.com.au</a>.
+      </p>
+      <p>
+        <a class="download" href="/history/chronicle-1884-1967.pdf" target="_blank" rel="noopener">
+          ⬇ Download the full archive as PDF (314 KB)
+        </a>
+      </p>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .container { margin: 0 auto; }
+  .container.wide   { max-width: 1200px; }
+  .container.narrow { max-width: 800px; }
+
+  .eyebrow {
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+
+  /* ── Decade rail ─────────────────────────────────────────────────────── */
+  .rail {
+    background: var(--blue-darkest);
+    padding: 48px 32px;
+    border-bottom: 3px solid var(--red);
+  }
+  .rail .eyebrow { color: rgba(255, 255, 255, 0.7); }
+  .rail-pills { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .rail-pill {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 12px 18px;
+    display: flex; flex-direction: column; gap: 2px;
+    text-decoration: none; color: var(--white);
+    min-width: 100px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .rail-pill:hover { background: rgba(200, 16, 46, 0.15); border-color: var(--red); }
+  .rail-year { font-family: var(--display); font-size: 22px; letter-spacing: 0.04em; }
+  .rail-count { font-family: var(--headline); font-size: 11px; letter-spacing: 0.1em;
+                text-transform: uppercase; color: rgba(255, 255, 255, 0.55); }
+
+  /* ── Chronicle body ──────────────────────────────────────────────────── */
+  .chronicle { background: var(--cream); padding: 80px 32px; }
+
+  .decade-block { scroll-margin-top: 80px; margin-bottom: 72px; }
+  .decade-h {
+    font-family: var(--display);
+    font-size: clamp(52px, 8vw, 96px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    line-height: 0.9;
+    margin: 0 0 32px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid var(--red);
+  }
+
+  .timeline { display: flex; flex-direction: column; gap: 28px; }
+
+  .entry {
+    background: var(--white);
+    border-left: 3px solid var(--red);
+    border-radius: 0 6px 6px 0;
+    padding: 22px 28px;
+    box-shadow: 0 2px 10px rgba(10, 31, 61, 0.06);
+  }
+  .entry-date {
+    font-family: var(--headline);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 10px;
+  }
+  .entry-body {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.65;
+    color: var(--charcoal);
+    margin: 0;
+    white-space: pre-line;
+  }
+
+  /* ── Source ──────────────────────────────────────────────────────────── */
+  .source {
+    background: var(--white);
+    padding: 80px 32px 100px;
+    border-top: 1px solid var(--line);
+  }
+  .source h3 {
+    font-family: var(--display);
+    font-size: clamp(28px, 3.5vw, 42px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    letter-spacing: 0.02em;
+    margin: 0 0 20px;
+  }
+  .source p {
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.7;
+    color: var(--charcoal);
+    margin-bottom: 18px;
+  }
+  .source em { color: var(--blue-deep); }
+  .source a { color: var(--red); border-bottom: 2px solid var(--red); }
+  .source a.download {
+    display: inline-block;
+    background: var(--blue-deep);
+    color: var(--white);
+    padding: 12px 22px;
+    text-decoration: none;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 6px;
+    transition: background 0.2s;
+  }
+  .source a.download:hover { background: var(--red); }
+
+  @media (max-width: 720px) {
+    .rail-pill { flex: 1 1 auto; min-width: 45%; }
+    .chronicle, .source { padding: 56px 24px; }
+    .entry { padding: 18px 20px; }
+    .entry-body { font-size: 16px; }
+  }
+</style>

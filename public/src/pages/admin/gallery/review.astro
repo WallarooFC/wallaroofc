@@ -1,0 +1,255 @@
+---
+export const prerender = false;
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAdminClient } from '../../../lib/supabase';
+
+const db = getAdminClient();
+
+// Batches with pending photos, most-recent first.
+const { data: batchesRaw } = await db
+  .from('photo_submission_batches')
+  .select(`
+    id, submitted_at, round, grade, opponent, venue, match_date, note, photo_count,
+    contributor:photo_contributors ( id, mobile, full_name ),
+    submissions:photo_submissions ( id, storage_path, thumb_path, status, original_name, caption, width, height )
+  `)
+  .order('submitted_at', { ascending: false })
+  .limit(80);
+
+// Prune finished batches (all approved/rejected) from the pending view.
+type Batch = NonNullable<typeof batchesRaw>[number];
+const batches: Batch[] = (batchesRaw ?? []).filter((b: any) =>
+  (b.submissions ?? []).some((s: any) => s.status === 'pending')
+);
+
+const restricted = await db.from('photo_restricted_players').select('*').order('full_name');
+const restrictedList = restricted.data ?? [];
+
+// Signed URLs for thumbs (bucket is private).
+async function signBatch(subs: any[]) {
+  const paths = subs.map(s => s.thumb_path || s.storage_path).filter(Boolean);
+  if (!paths.length) return {};
+  const { data } = await db.storage.from('photo-submissions').createSignedUrls(paths, 3600);
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) if (row.path) map[row.path] = row.signedUrl;
+  return map;
+}
+const urlMap: Record<string, string> = {};
+for (const b of batches) {
+  const map = await signBatch((b as any).submissions ?? []);
+  Object.assign(urlMap, map);
+}
+
+const totalPending = batches.reduce((n: number, b: any) =>
+  n + (b.submissions ?? []).filter((s: any) => s.status === 'pending').length, 0);
+---
+
+<AdminLayout title="Photo Review">
+  <div class="section-label">Awaiting Review</div>
+
+  <div class="head-strip">
+    <div>
+      <div class="head-count">{totalPending}</div>
+      <div class="head-count-l">photos pending across {batches.length} batches</div>
+    </div>
+    <div class="head-actions">
+      <a href="/admin/gallery" class="btn ghost small">← Back to Gallery</a>
+    </div>
+  </div>
+
+  {restrictedList.length > 0 && (
+    <div class="restricted-strip">
+      <strong>Players on the restricted-photo register</strong>
+      <span>{restrictedList.map((r: any) => r.full_name).join(' · ')}</span>
+      <span class="dim">Look for these faces before approving.</span>
+    </div>
+  )}
+
+  {batches.length === 0 ? (
+    <div class="empty">Nothing to review. When a contributor submits photos they'll appear here.</div>
+  ) : (
+    batches.map((b: any) => {
+      const pending = (b.submissions ?? []).filter((s: any) => s.status === 'pending');
+      if (pending.length === 0) return null;
+      return (
+        <section class="batch" data-batch-id={b.id}>
+          <header class="batch-head">
+            <div class="batch-head-main">
+              <h2>Round {b.round ?? '—'} · {b.grade ?? 'grade?'} · v {b.opponent ?? 'opponent?'}</h2>
+              <div class="batch-meta">
+                <span class="chip">{b.match_date ?? '—'}</span>
+                <span class="chip">{b.venue ?? '—'}</span>
+                <span class="chip">{pending.length} pending</span>
+                <span class="chip contrib">
+                  {b.contributor?.full_name ?? b.contributor?.mobile ?? 'unknown contributor'}
+                </span>
+                <span class="chip dim">submitted {new Date(b.submitted_at).toLocaleString('en-AU')}</span>
+              </div>
+              {b.note && <p class="batch-note">"{b.note}"</p>}
+            </div>
+            <div class="batch-controls">
+              <label class="check-all">
+                <input type="checkbox" class="check-all-input" />
+                <span>Select all</span>
+              </label>
+              <button type="button" class="btn primary approve-selected">Approve selected</button>
+              <button type="button" class="btn danger reject-selected">Reject selected</button>
+            </div>
+          </header>
+
+          <div class="thumb-grid">
+            {pending.map((s: any) => (
+              <label class="thumb" data-sub-id={s.id}>
+                <input type="checkbox" class="thumb-check" value={s.id} />
+                <img src={urlMap[s.thumb_path] || urlMap[s.storage_path] || ''}
+                     alt={s.caption || s.original_name || 'submission'}
+                     loading="lazy" />
+                <div class="thumb-meta">
+                  <span class="thumb-name">{s.original_name}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+      );
+    })
+  )}
+</AdminLayout>
+
+<style>
+  .section-label { font-family: var(--headline, sans-serif); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--admin-muted); margin: 24px 0 12px; }
+
+  .head-strip {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+    background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 8px;
+    padding: 20px 24px; margin-bottom: 24px; gap: 12px;
+  }
+  .head-count { font-size: 40px; font-weight: 700; line-height: 1; color: #f87171; }
+  .head-count-l { font-size: 12px; color: var(--admin-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+  .btn {
+    font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 6px;
+    cursor: pointer; text-decoration: none; border: none;
+  }
+  .btn.primary { background: #C8102E; color: white; }
+  .btn.primary:hover { background: #a00e26; }
+  .btn.danger  { background: transparent; color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+  .btn.danger:hover { background: rgba(239,68,68,0.1); border-color: #f87171; }
+  .btn.ghost   { background: transparent; color: var(--admin-muted); border: 1px solid var(--admin-border); }
+  .btn.ghost:hover { color: var(--admin-text); border-color: var(--admin-text); }
+  .btn.small { padding: 6px 12px; font-size: 11px; }
+
+  .restricted-strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    background: rgba(200,16,46,0.06); border: 1px solid rgba(200,16,46,0.3);
+    border-radius: 6px; padding: 10px 16px; margin-bottom: 24px;
+    font-size: 13px; color: var(--admin-text);
+  }
+  .restricted-strip strong { color: #f87171; }
+  .restricted-strip .dim { color: var(--admin-muted); font-size: 12px; font-style: italic; }
+
+  .empty {
+    background: var(--admin-card); border: 1px dashed var(--admin-border);
+    border-radius: 8px; padding: 40px; text-align: center;
+    color: var(--admin-muted); font-style: italic;
+  }
+
+  .batch {
+    background: var(--admin-card); border: 1px solid var(--admin-border);
+    border-radius: 8px; margin-bottom: 24px; overflow: hidden;
+  }
+  .batch-head {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;
+    padding: 18px 22px; border-bottom: 1px solid var(--admin-border);
+    background: rgba(255,255,255,0.02); flex-wrap: wrap;
+  }
+  .batch-head-main { flex: 1; min-width: 260px; }
+  .batch-head h2 {
+    font-family: 'Bebas Neue', sans-serif; font-size: 20px; letter-spacing: 0.04em;
+    text-transform: uppercase; margin: 0 0 8px;
+  }
+  .batch-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--admin-border);
+    border-radius: 4px; padding: 3px 10px; font-size: 11px; letter-spacing: 0.04em;
+    color: var(--admin-text);
+  }
+  .chip.contrib { background: rgba(200,16,46,0.12); border-color: rgba(200,16,46,0.35); color: #FCA5A5; }
+  .chip.dim { color: var(--admin-muted); }
+  .batch-note {
+    font-family: var(--serif, serif); font-size: 12px; font-style: italic;
+    color: var(--admin-muted); margin: 8px 0 0;
+  }
+
+  .batch-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .check-all { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--admin-muted); }
+
+  .thumb-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px; padding: 16px 22px 22px;
+  }
+  .thumb {
+    position: relative;
+    background: rgba(0,0,0,0.3);
+    border: 2px solid var(--admin-border);
+    border-radius: 6px; overflow: hidden;
+    cursor: pointer; display: block;
+    transition: border-color 0.15s;
+  }
+  .thumb:has(.thumb-check:checked) { border-color: #C8102E; }
+  .thumb img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+  .thumb-check {
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    width: 18px; height: 18px; accent-color: #C8102E;
+  }
+  .thumb-meta {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+    padding: 14px 8px 6px;
+  }
+  .thumb-name {
+    font-size: 10px; color: rgba(255,255,255,0.8);
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.batch').forEach(batch => {
+    const checkAll = batch.querySelector<HTMLInputElement>('.check-all-input');
+    const thumbs   = batch.querySelectorAll<HTMLInputElement>('.thumb-check');
+    const approveBtn = batch.querySelector<HTMLButtonElement>('.approve-selected');
+    const rejectBtn  = batch.querySelector<HTMLButtonElement>('.reject-selected');
+
+    checkAll?.addEventListener('change', () => {
+      thumbs.forEach(t => t.checked = checkAll.checked);
+    });
+
+    async function act(action: 'approve' | 'reject') {
+      const ids = Array.from(thumbs).filter(t => t.checked).map(t => t.value);
+      if (ids.length === 0) { alert('Select at least one photo.'); return; }
+      const confirmMsg = action === 'approve'
+        ? `Approve ${ids.length} photo${ids.length === 1 ? '' : 's'} — publish to public gallery?`
+        : `Reject ${ids.length} photo${ids.length === 1 ? '' : 's'} — remove from queue?`;
+      if (!confirm(confirmMsg)) return;
+
+      approveBtn && (approveBtn.disabled = true);
+      rejectBtn  && (rejectBtn.disabled  = true);
+      const res = await fetch('/api/admin/gallery-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) {
+        alert('Action failed: ' + (j.error ?? res.statusText));
+        approveBtn && (approveBtn.disabled = false);
+        rejectBtn  && (rejectBtn.disabled  = false);
+        return;
+      }
+      window.location.reload();
+    }
+
+    approveBtn?.addEventListener('click', () => act('approve'));
+    rejectBtn?.addEventListener('click',  () => act('reject'));
+  });
+</script>

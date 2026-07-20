@@ -1,0 +1,429 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import {
+  A_GRADE_FINALS, RESERVES_FINALS, SENIOR_COLTS_FINALS, JUNIOR_COLTS_FINALS,
+  PRE_1946_JUNIORS_RESERVES,
+} from '../../lib/grand-finals.ts';
+
+const totalFlags =
+  A_GRADE_FINALS.length + RESERVES_FINALS.length +
+  SENIOR_COLTS_FINALS.length + JUNIOR_COLTS_FINALS.length +
+  PRE_1946_JUNIORS_RESERVES.length;
+
+// Grand finals with a recorded score (i.e. the full scoreline is transcribed)
+const withScores = [
+  ...A_GRADE_FINALS, ...RESERVES_FINALS, ...SENIOR_COLTS_FINALS, ...JUNIOR_COLTS_FINALS,
+].filter(f => f.score).length;
+
+// Best-on-Ground recorded count
+const withBog = [
+  ...A_GRADE_FINALS, ...RESERVES_FINALS, ...SENIOR_COLTS_FINALS, ...JUNIOR_COLTS_FINALS,
+].filter(f => f.bog).length;
+
+// Biggest A-Grade winning margin
+type Margin = { year: number; margin: number; score: string; opp: string; opp_score: string };
+const marginTable: Margin[] = A_GRADE_FINALS
+  .filter(f => f.score && f.opp_score)
+  .map(f => {
+    const w = parseInt(f.score!.split('-').pop() || '0');
+    const l = parseInt(f.opp_score!.split('-').pop() || '0');
+    return { year: f.year, margin: w - l, score: f.score!, opp: f.opp!, opp_score: f.opp_score! };
+  })
+  .sort((a, b) => b.margin - a.margin);
+const biggestMargin = marginTable[0];
+---
+<PageLayout
+  title="Grand Finals Ledger · Wallaroo FC"
+  description="Every flag Wallaroo Football Club has ever lifted — A Grade, Reserves, Senior Colts, Junior Colts — with the full scoreline, opponent and Best-on-Ground where recorded."
+>
+  <PageHero
+    eyebrow="Grand Finals"
+    title="Every flag,"
+    titleItalic="every scoreline."
+    intro="From the first YP Association flag in 1889 through to the 2025 season. Every recorded Wallaroo Football Club grand final win, with the full scoreline, opponent and Best-on-Ground where the archive captured it."
+  />
+
+  <!-- Stats overview -->
+  <section class="overview">
+    <div class="container wide">
+      <div class="eyebrow">The Trophy Cabinet</div>
+      <h2>Sixty flags,<span class="ital"> across five grades.</span></h2>
+      <p class="lede">
+        Every recorded Wallaroo Football Club premiership from 1889 to today.
+        Where the newspaper archive preserved the box-score, the full line is here — where
+        it didn't, we mark the year and leave the rest for the historians.
+      </p>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-n">{totalFlags}</span>
+          <span class="stat-l">Total Flags</span>
+          <span class="stat-sub">A Grade · Reserves · Senior Colts · Junior Colts · Pre-1946</span>
+        </div>
+        <div class="stat">
+          <span class="stat-n">{A_GRADE_FINALS.length}</span>
+          <span class="stat-l">A Grade Flags</span>
+          <span class="stat-sub">since 1889</span>
+        </div>
+        <div class="stat">
+          <span class="stat-n">{withScores}</span>
+          <span class="stat-l">Scores Recorded</span>
+          <span class="stat-sub">every line preserved from the archive</span>
+        </div>
+        <div class="stat highlight">
+          <span class="stat-n">{biggestMargin.margin}</span>
+          <span class="stat-l">Biggest A Grade Margin</span>
+          <span class="stat-sub">1983 · Wallaroo {biggestMargin.score} def Maitland {biggestMargin.opp_score}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- A Grade -->
+  <section class="grade-section a-grade">
+    <div class="container wide">
+      <div class="eyebrow">A Grade</div>
+      <h2>The senior flag,<span class="ital"> {A_GRADE_FINALS.length} times.</span></h2>
+      <p class="lede">Every recorded Wallaroo A Grade premiership. Scoreboard as-recorded (goals-behinds-points).</p>
+      <div class="finals-grid">
+        {A_GRADE_FINALS.map(f => (
+          <article class={`final-card ${f.score ? 'has-score' : 'no-score'}`}>
+            <div class="final-year">{f.year}</div>
+            {f.score && f.opp ? (
+              <>
+                <div class="final-line winner">
+                  <span class="team">Wallaroo</span>
+                  <span class="score">{f.score}</span>
+                </div>
+                <div class="final-def">def</div>
+                <div class="final-line loser">
+                  <span class="team">{f.opp}</span>
+                  <span class="score">{f.opp_score}</span>
+                </div>
+                {f.bog && (
+                  <div class="final-bog">
+                    <span class="bog-label">Best on Ground</span>
+                    <span class="bog-name">{f.bog}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div class="no-scoreline">Scoreline not on record</div>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Reserves / A2 / B-Grade -->
+  <section class="grade-section reserves">
+    <div class="container wide">
+      <div class="eyebrow">Reserves · A2 · B Grade</div>
+      <h2>The seconds,<span class="ital"> {RESERVES_FINALS.length} flags strong.</span></h2>
+      <div class="finals-grid">
+        {RESERVES_FINALS.map(f => (
+          <article class="final-card has-score">
+            <div class="final-year">{f.year}</div>
+            <div class="final-line winner">
+              <span class="team">Wallaroo</span>
+              <span class="score">{f.score}</span>
+            </div>
+            <div class="final-def">def</div>
+            <div class="final-line loser">
+              <span class="team">{f.opp}</span>
+              <span class="score">{f.opp_score}</span>
+            </div>
+            {f.bog && (
+              <div class="final-bog">
+                <span class="bog-label">Best on Ground</span>
+                <span class="bog-name">{f.bog}</span>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Senior Colts -->
+  <section class="grade-section senior-colts">
+    <div class="container wide">
+      <div class="eyebrow">Senior Colts</div>
+      <h2>The under-eighteens,<span class="ital"> {SENIOR_COLTS_FINALS.length} flags &amp; counting.</span></h2>
+      <p class="lede">Five flags across the last four seasons — the modern Bulldog dynasty runs through the colts.</p>
+      <div class="finals-grid">
+        {SENIOR_COLTS_FINALS.map(f => (
+          <article class="final-card has-score">
+            <div class="final-year">{f.year}</div>
+            <div class="final-line winner">
+              <span class="team">Wallaroo</span>
+              <span class="score">{f.score}</span>
+            </div>
+            <div class="final-def">def</div>
+            <div class="final-line loser">
+              <span class="team">{f.opp}</span>
+              <span class="score">{f.opp_score}</span>
+            </div>
+            {f.bog && (
+              <div class="final-bog">
+                <span class="bog-label">Best on Ground</span>
+                <span class="bog-name">{f.bog}</span>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Junior Colts -->
+  <section class="grade-section junior-colts">
+    <div class="container wide">
+      <div class="eyebrow">Junior Colts</div>
+      <h2>The kids,<span class="ital"> {JUNIOR_COLTS_FINALS.length} times champions.</span></h2>
+      <div class="finals-grid">
+        {JUNIOR_COLTS_FINALS.map(f => (
+          <article class="final-card has-score">
+            <div class="final-year">{f.year}</div>
+            <div class="final-line winner">
+              <span class="team">Wallaroo</span>
+              <span class="score">{f.score}</span>
+            </div>
+            <div class="final-def">def</div>
+            <div class="final-line loser">
+              <span class="team">{f.opp}</span>
+              <span class="score">{f.opp_score}</span>
+            </div>
+            {f.bog && (
+              <div class="final-bog">
+                <span class="bog-label">Best on Ground</span>
+                <span class="bog-name">{f.bog}</span>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Pre-1946 -->
+  <section class="grade-section pre-1946">
+    <div class="container wide">
+      <div class="eyebrow">Pre-1946</div>
+      <h2>Combined juniors<span class="ital"> &amp; reserves.</span></h2>
+      <p class="lede">
+        Before 1946, the colts and reserves ran as one competition — while still affiliated with
+        Wallaroo. Nine flags on record. The scorelines from these seasons are lost.
+      </p>
+      <div class="early-list">
+        {PRE_1946_JUNIORS_RESERVES.map(r => (
+          <div class="early-card">
+            <span class="early-year">{r.year}</span>
+            <span class="early-grade">{r.grade}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</PageLayout>
+
+<style>
+  .container { margin: 0 auto; max-width: 1200px; }
+
+  .eyebrow {
+    font-family: var(--headline); font-size: 13px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--red); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ''; width: 32px; height: 3px; background: var(--red); }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(36px, 5vw, 60px);
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    line-height: 0.95;
+    margin: 0 0 14px;
+  }
+  h2 .ital {
+    font-family: var(--serif); font-style: italic; color: var(--red);
+    text-transform: none; letter-spacing: -0.02em;
+  }
+  .lede {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.65;
+    color: var(--charcoal);
+    margin-bottom: 40px;
+    max-width: 780px;
+  }
+
+  /* ── Overview ────────────────────────────────────────────────────── */
+  .overview { background: var(--white); padding: 90px 32px; border-bottom: 1px solid var(--line); }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .stat {
+    background: var(--cream);
+    border-left: 4px solid var(--red);
+    padding: 28px 30px;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat.highlight { background: var(--blue-deep); color: var(--white); }
+  .stat.highlight .stat-l { color: rgba(255,255,255,0.85); }
+  .stat.highlight .stat-sub { color: rgba(255,255,255,0.65); }
+  .stat-n {
+    font-family: var(--display);
+    font-size: clamp(48px, 5vw, 68px);
+    line-height: 1;
+    color: var(--red);
+  }
+  .stat.highlight .stat-n { color: #ff5570; }
+  .stat-l { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blue-deep); }
+  .stat-sub { font-family: var(--body); font-size: 12px; color: var(--grey); line-height: 1.4; }
+
+  /* ── Grade sections ─────────────────────────────────────────────── */
+  .grade-section { padding: 90px 32px; border-top: 1px solid var(--line); }
+  .a-grade      { background: var(--blue-darkest); color: var(--white); border-top: 4px solid var(--red); }
+  .reserves     { background: var(--white); }
+  .senior-colts { background: var(--cream); }
+  .junior-colts { background: var(--white); }
+  .pre-1946     { background: var(--cream); }
+
+  .a-grade h2 { color: var(--white); }
+  .a-grade .eyebrow { color: rgba(255,255,255,0.7); }
+  .a-grade .lede    { color: rgba(255,255,255,0.75); }
+
+  /* ── Final cards ────────────────────────────────────────────────── */
+  .finals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .final-card {
+    background: var(--white);
+    border-radius: 6px;
+    border-top: 4px solid var(--red);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 3px 16px rgba(10,31,61,0.08);
+  }
+  .a-grade .final-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-top: 4px solid var(--red); box-shadow: none; }
+  .senior-colts .final-card { background: var(--white); }
+
+  .final-year {
+    font-family: var(--display);
+    font-size: 34px;
+    color: var(--red);
+    line-height: 1;
+    letter-spacing: 0.03em;
+  }
+  .final-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .final-line .team {
+    font-family: var(--headline);
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .final-line .score {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: 0.03em;
+  }
+  .final-line.winner .team, .final-line.winner .score { color: var(--blue-deep); }
+  .final-line.loser  .team, .final-line.loser  .score { color: var(--grey); }
+  .a-grade .final-line.winner .team,
+  .a-grade .final-line.winner .score { color: var(--white); }
+  .a-grade .final-line.loser  .team,
+  .a-grade .final-line.loser  .score { color: rgba(255,255,255,0.5); }
+
+  .final-def {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 12px;
+    color: var(--red);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .final-bog {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .a-grade .final-bog { border-top-color: rgba(255,255,255,0.15); }
+  .bog-label {
+    font-family: var(--headline);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--grey);
+  }
+  .a-grade .bog-label { color: rgba(255,255,255,0.55); }
+  .bog-name {
+    font-family: var(--display);
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    color: var(--red);
+  }
+  .no-scoreline {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--grey);
+  }
+  .a-grade .no-scoreline { color: rgba(255,255,255,0.4); }
+
+  /* Early combined juniors ── */
+  .early-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .early-card {
+    background: var(--white);
+    border-left: 3px solid var(--red);
+    padding: 14px 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .early-year {
+    font-family: var(--display);
+    font-size: 22px;
+    color: var(--red);
+    letter-spacing: 0.03em;
+  }
+  .early-grade {
+    font-family: var(--headline);
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--blue-deep);
+  }
+
+  @media (max-width: 720px) {
+    .overview, .grade-section { padding: 56px 24px; }
+    .final-year { font-size: 28px; }
+    .final-line .score { font-size: 17px; }
+  }
+</style>
