@@ -63,9 +63,7 @@ const { data: contributors } = await db
   .select('id, email, full_name, is_active, is_approved, last_login_at, created_at')
   .order('created_at', { ascending: false });
 
-// Count each contributor's submitted photos
-const { data: subCounts } = await db.rpc('exec_sql' as any, {}).catch(() => ({ data: null }));
-// Fallback: compute counts client-side from photo_submissions
+// Compute per-contributor submission counts client-side (no RPC needed).
 const { data: submissions } = await db
   .from('photo_submissions')
   .select('contributor_id, status');
