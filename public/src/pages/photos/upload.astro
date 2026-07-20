@@ -7,16 +7,54 @@ import { getSession } from '../../lib/photo-hub';
 const db = getAdminClient();
 const session = await getSession(Astro.cookies);
 
-// Load fixtures once — the picker chews from this.
+// Load season fixtures so the round picker can show the opponent per round.
 const { data: fixturesRaw } = await db
   .from('fixtures')
   .select('id, season, round, grade, match_date, match_time, venue, opponent, is_home')
   .eq('season', 2026)
-  .order('match_date', { ascending: false })
-  .limit(200);
+  .order('round', { ascending: true })
+  .limit(500);
 const fixtures = fixturesRaw ?? [];
 
-const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Boolean))) as string[];
+// Contributors only pick between Seniors and Juniors — a round then narrows
+// the choice to a specific Bulldog match.  Everything in `fixtures` right now
+// is senior-competition (A/B/SC/JC), but the split is future-proof for junior
+// competition data once that syncs.
+const SENIOR_GRADES = new Set(['a-grade', 'a grade', 'b grade', 'senior colts', 'junior colts']);
+function tierOf(grade: string | null): 'seniors' | 'juniors' | null {
+  if (!grade) return null;
+  return SENIOR_GRADES.has(grade.toLowerCase()) ? 'seniors' : 'juniors';
+}
+
+type TierRound = {
+  round:      number;
+  opponent:   string | null;
+  venue:      string | null;
+  match_date: string | null;
+  fixture_id: string | null;
+};
+
+// Group by tier + round.  Within a tier all Bulldog grades on a given round
+// play the same opposition, so we pick the first grade's fixture as the
+// representative and its opponent as the round label.
+const tierRounds: Record<'seniors' | 'juniors', TierRound[]> = { seniors: [], juniors: [] };
+const seen: Record<'seniors' | 'juniors', Set<number>> = { seniors: new Set(), juniors: new Set() };
+for (const f of fixtures) {
+  const tier = tierOf(f.grade);
+  if (!tier || f.round == null) continue;
+  if (seen[tier].has(f.round)) continue;
+  seen[tier].add(f.round);
+  tierRounds[tier].push({
+    round:      f.round,
+    opponent:   f.opponent ?? null,
+    venue:      f.venue ?? null,
+    match_date: f.match_date ?? null,
+    fixture_id: f.id ?? null,
+  });
+}
+tierRounds.seniors.sort((a, b) => a.round - b.round);
+tierRounds.juniors.sort((a, b) => a.round - b.round);
+const tierRoundsJson = JSON.stringify(tierRounds);
 ---
 <PageLayout
   title="Contribute Photos · Wallaroo FC"
@@ -68,41 +106,30 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
 
           <hr />
 
-          <h2>Choose the match</h2>
+          <h2>Choose the round</h2>
+          <script id="tier-rounds-data" type="application/json" set:html={tierRoundsJson}></script>
           <div class="fixture-picker">
             <div class="pill-row">
               <label>
                 <span>Grade</span>
-                <select id="grade">
-                  <option value="">— any —</option>
-                  {grades.map(g => <option value={g}>{g}</option>)}
+                <select id="tier">
+                  <option value="">— select —</option>
+                  <option value="seniors">Seniors</option>
+                  <option value="juniors">Juniors</option>
                 </select>
               </label>
               <label>
-                <span>Match</span>
-                <select id="fixture-select">
-                  <option value="">Pick a match…</option>
-                  {fixtures.map(f => (
-                    <option
-                      value={f.id}
-                      data-round={f.round ?? ''}
-                      data-grade={f.grade ?? ''}
-                      data-opp={f.opponent ?? ''}
-                      data-venue={f.venue ?? ''}
-                      data-date={f.match_date ?? ''}
-                      data-is-home={String(f.is_home)}
-                    >
-                      Rd {f.round} · {f.grade} · v {f.opponent} · {f.match_date}
-                    </option>
-                  ))}
+                <span>Round</span>
+                <select id="round-select" disabled>
+                  <option value="">Pick a grade first…</option>
                 </select>
               </label>
             </div>
 
             <div id="fixture-details" class="fixture-details" hidden>
-              <div><span class="det-label">Round</span><span id="d-round">—</span></div>
               <div><span class="det-label">Grade</span><span id="d-grade">—</span></div>
-              <div><span class="det-label">Opponent</span><span id="d-opp">—</span></div>
+              <div><span class="det-label">Round</span><span id="d-round">—</span></div>
+              <div><span class="det-label">Match</span><span id="d-match">—</span></div>
               <div><span class="det-label">Venue</span><span id="d-venue">—</span></div>
               <div><span class="det-label">Date</span><span id="d-date">—</span></div>
             </div>
@@ -407,46 +434,81 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
   });
 
   // ── Upload flow (only present when signed in) ───────────────────────
-  const fixSel   = document.getElementById('fixture-select') as HTMLSelectElement | null;
-  const gradeSel = document.getElementById('grade') as HTMLSelectElement | null;
-  const details  = document.getElementById('fixture-details');
-  const dropzone = document.getElementById('dropzone');
-  const fileInput= document.getElementById('file-input') as HTMLInputElement | null;
-  const fileList = document.getElementById('file-list');
-  const consent  = document.getElementById('consent') as HTMLInputElement | null;
-  const submit   = document.getElementById('submit-btn') as HTMLButtonElement | null;
-  const status   = document.getElementById('submit-status');
-  const note     = document.getElementById('batch-note') as HTMLTextAreaElement | null;
+  type TierRound = { round: number; opponent: string | null; venue: string | null; match_date: string | null; fixture_id: string | null };
+  type TierRounds = { seniors: TierRound[]; juniors: TierRound[] };
+  const tierRoundsEl = document.getElementById('tier-rounds-data');
+  const TIER_ROUNDS: TierRounds = tierRoundsEl?.textContent
+    ? JSON.parse(tierRoundsEl.textContent)
+    : { seniors: [], juniors: [] };
+  const TIER_LABEL: Record<string, string> = { seniors: 'Seniors', juniors: 'Juniors' };
+
+  const tierSel   = document.getElementById('tier') as HTMLSelectElement | null;
+  const roundSel  = document.getElementById('round-select') as HTMLSelectElement | null;
+  const details   = document.getElementById('fixture-details');
+  const dropzone  = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
+  const fileList  = document.getElementById('file-list');
+  const consent   = document.getElementById('consent') as HTMLInputElement | null;
+  const submit    = document.getElementById('submit-btn') as HTMLButtonElement | null;
+  const status    = document.getElementById('submit-status');
+  const note      = document.getElementById('batch-note') as HTMLTextAreaElement | null;
 
   let selectedFiles: File[] = [];
+  let currentRound: TierRound | null = null;
+  let currentTier: 'seniors' | 'juniors' | null = null;
 
   function updateSubmit() {
     if (!submit) return;
-    submit.disabled = !(fixSel?.value && consent?.checked && selectedFiles.length > 0);
+    submit.disabled = !(currentTier && currentRound && consent?.checked && selectedFiles.length > 0);
   }
 
-  gradeSel?.addEventListener('change', () => {
-    if (!fixSel) return;
-    const g = gradeSel.value;
-    for (const opt of Array.from(fixSel.options)) {
-      if (!opt.value) continue;
-      const optGrade = opt.getAttribute('data-grade') ?? '';
-      opt.hidden = !!g && optGrade !== g;
+  tierSel?.addEventListener('change', () => {
+    if (!roundSel) return;
+    const t = tierSel.value as 'seniors' | 'juniors' | '';
+    currentTier = t || null;
+    currentRound = null;
+    roundSel.innerHTML = '';
+    if (!t) {
+      roundSel.disabled = true;
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = 'Pick a grade first…';
+      roundSel.appendChild(opt);
+      if (details) details.hidden = true;
+      updateSubmit();
+      return;
     }
-    // If the current selection is now hidden, reset.
-    const cur = fixSel.selectedOptions[0];
-    if (cur && cur.hidden) { fixSel.value = ''; details && (details.hidden = true); updateSubmit(); }
+    const rounds = TIER_ROUNDS[t] ?? [];
+    roundSel.disabled = rounds.length === 0;
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = rounds.length === 0 ? 'No rounds available for this grade' : 'Pick a round…';
+    roundSel.appendChild(placeholder);
+    for (const r of rounds) {
+      const opt = document.createElement('option');
+      opt.value = String(r.round);
+      opt.textContent = `Round ${r.round} · Wallaroo v ${r.opponent ?? 'tbc'}`;
+      roundSel.appendChild(opt);
+    }
+    if (details) details.hidden = true;
+    updateSubmit();
   });
 
-  fixSel?.addEventListener('change', () => {
-    if (!fixSel || !details) return;
-    const opt = fixSel.selectedOptions[0];
-    if (!opt || !opt.value) { details.hidden = true; updateSubmit(); return; }
-    (document.getElementById('d-round') as HTMLElement).textContent = opt.getAttribute('data-round') || '—';
-    (document.getElementById('d-grade') as HTMLElement).textContent = opt.getAttribute('data-grade') || '—';
-    (document.getElementById('d-opp')   as HTMLElement).textContent = 'v ' + (opt.getAttribute('data-opp') || '—');
-    (document.getElementById('d-venue') as HTMLElement).textContent = opt.getAttribute('data-venue') || '—';
-    (document.getElementById('d-date')  as HTMLElement).textContent = opt.getAttribute('data-date') || '—';
+  roundSel?.addEventListener('change', () => {
+    if (!roundSel || !details || !currentTier) return;
+    const roundNum = parseInt(roundSel.value, 10);
+    if (!roundNum) {
+      currentRound = null;
+      details.hidden = true;
+      updateSubmit();
+      return;
+    }
+    currentRound = TIER_ROUNDS[currentTier].find(r => r.round === roundNum) ?? null;
+    if (!currentRound) { details.hidden = true; updateSubmit(); return; }
+    (document.getElementById('d-grade') as HTMLElement).textContent = TIER_LABEL[currentTier];
+    (document.getElementById('d-round') as HTMLElement).textContent = `Round ${currentRound.round}`;
+    (document.getElementById('d-match') as HTMLElement).textContent = `Wallaroo v ${currentRound.opponent ?? 'tbc'}`;
+    (document.getElementById('d-venue') as HTMLElement).textContent = currentRound.venue ?? '—';
+    (document.getElementById('d-date')  as HTMLElement).textContent = currentRound.match_date ?? '—';
     details.hidden = false;
     updateSubmit();
   });
@@ -494,20 +556,18 @@ const grades: string[] = Array.from(new Set(fixtures.map(f => f.grade).filter(Bo
   });
 
   submit?.addEventListener('click', async () => {
-    if (!fixSel || !status) return;
-    const opt = fixSel.selectedOptions[0];
-    if (!opt) return;
+    if (!currentTier || !currentRound || !status) return;
     submit.disabled = true;
     submit.textContent = 'Uploading…';
     status.textContent = `Uploading ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`;
 
     const fd = new FormData();
-    fd.append('fixture_id', opt.value);
-    fd.append('round',      opt.getAttribute('data-round')  ?? '');
-    fd.append('grade',      opt.getAttribute('data-grade')  ?? '');
-    fd.append('opponent',   opt.getAttribute('data-opp')    ?? '');
-    fd.append('venue',      opt.getAttribute('data-venue')  ?? '');
-    fd.append('match_date', opt.getAttribute('data-date')   ?? '');
+    fd.append('fixture_id', currentRound.fixture_id ?? '');
+    fd.append('round',      String(currentRound.round));
+    fd.append('grade',      TIER_LABEL[currentTier]);
+    fd.append('opponent',   currentRound.opponent  ?? '');
+    fd.append('venue',      currentRound.venue     ?? '');
+    fd.append('match_date', currentRound.match_date ?? '');
     fd.append('note',       note?.value ?? '');
     fd.append('consent_ack','true');
     for (const f of selectedFiles) fd.append('files', f, f.name);
