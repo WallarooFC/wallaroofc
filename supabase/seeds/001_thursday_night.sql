@@ -50,12 +50,12 @@ values (
     'ctaLabel', 'See the menu',
     'ctaUrl', 'https://wallaroofc.com/thursday-night',
     'imageUrl', 'https://wallaroofc.com/takeover/thursday-night.png',
-    -- Prominence: enlarge and slow-rock ±25° so it draws the eye without
+    -- Prominence: enlarge and slow-rock ±15° so it draws the eye without
     -- feeling frantic.  holdMs keeps the modal up long enough for two
     -- full rock cycles (24 s + 12 s animation).
     'scale',     1.55,
     'rotate',    true,
-    'rotateDeg', 25,
+    'rotateDeg', 15,
     'holdMs',    24000
   )
 );
