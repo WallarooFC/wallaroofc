@@ -209,7 +209,10 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
         root.querySelector(".wfc-close").addEventListener("click", dismiss);
         root.querySelector(".wfc-backdrop").addEventListener("click", dismiss);
         requestAnimationFrame(function () { root.classList.add("wfc-in"); });
-        exitTimer = setTimeout(dismiss, HOLD_MS + ANIM_MS);
+        // Optional per-template hold override (e.g. slow-rocked takeovers
+        // that want two full rotation cycles visible).
+        var holdMs = (typeof body.holdMs === "number" && body.holdMs > 0) ? body.holdMs : HOLD_MS;
+        exitTimer = setTimeout(dismiss, holdMs + ANIM_MS);
       }
 
       function boot() {

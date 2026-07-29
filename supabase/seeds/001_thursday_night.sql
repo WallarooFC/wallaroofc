@@ -49,6 +49,13 @@ values (
     'Meals in the clubrooms tonight after training. Parmi $24 · Schnitzel $22 · Half schnitzel $12 · Nuggets & chips $10. Veggie bar available. Bar open, all welcome.',
     'ctaLabel', 'See the menu',
     'ctaUrl', 'https://wallaroofc.com/thursday-night',
-    'imageUrl', 'https://wallaroofc.com/takeover/thursday-night.png'
+    'imageUrl', 'https://wallaroofc.com/takeover/thursday-night.png',
+    -- Prominence: enlarge and slow-rock ±25° so it draws the eye without
+    -- feeling frantic.  holdMs keeps the modal up long enough for two
+    -- full rock cycles (24 s + 12 s animation).
+    'scale',     1.55,
+    'rotate',    true,
+    'rotateDeg', 25,
+    'holdMs',    24000
   )
 );
