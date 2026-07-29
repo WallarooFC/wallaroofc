@@ -1,31 +1,8 @@
 ---
 export const prerender = false;
-import { Image } from 'astro:assets';
-import type { ImageMetadata } from 'astro';
 import PageLayout from '../../layouts/PageLayout.astro';
 import PageHero from '../../components/PageHero.astro';
 import { supabase } from '../../lib/supabase';
-
-// ── Static fallback photos ────────────────────────────────────────────────────
-import wallarooOval      from '../../assets/photos/wallaroo-oval-home-crowd.jpg';
-import u11Contest        from '../../assets/photos/u11-contest-vs-yorketown.jpg';
-import inThePack         from '../../assets/photos/in-the-pack.jpg';
-import midfieldBattle    from '../../assets/photos/midfield-battle.jpg';
-import onTheRun          from '../../assets/photos/on-the-run.jpg';
-import firstToTheFooty   from '../../assets/photos/first-to-the-footy.jpg';
-import bulldogsVsCrows   from '../../assets/photos/bulldogs-vs-crows.jpg';
-import matchDayRunner    from '../../assets/photos/match-day-runner.jpg';
-import bulldogsInContest from '../../assets/photos/bulldogs-in-the-contest.jpg';
-import quickHands        from '../../assets/photos/quick-hands.jpg';
-import openFieldRunning  from '../../assets/photos/open-field-running.jpg';
-
-interface StaticPhoto {
-  src: ImageMetadata;
-  alt: string;
-  caption: string;
-  round?: number;
-  grade?: string;
-}
 
 interface DbPhoto {
   id: string;
@@ -41,47 +18,36 @@ interface DbPhoto {
   created_at: string;
 }
 
-const staticPhotos: StaticPhoto[] = [
-  { src: wallarooOval,       alt: 'Wallaroo Oval home crowd',                caption: 'Wallaroo Oval · home crowd', round: 5, grade: 'A-Grade'      },
-  { src: u11Contest,         alt: 'U11 contest against Yorketown',           caption: 'U11 contest · vs Yorketown', round: 4, grade: 'U11'           },
-  { src: inThePack,          alt: 'Players in the pack contesting the ball', caption: 'In the pack',                round: 5, grade: 'A-Grade'      },
-  { src: midfieldBattle,     alt: 'Midfield battle for possession',          caption: 'Midfield battle',            round: 5, grade: 'A-Grade'      },
-  { src: onTheRun,           alt: 'Bulldogs player on the run',              caption: 'On the run',                 round: 5, grade: 'A-Grade'      },
-  { src: firstToTheFooty,    alt: 'First to the footy contest',              caption: 'First to the footy',         round: 3, grade: 'B Grade'      },
-  { src: bulldogsVsCrows,    alt: 'Bulldogs vs CMS Crows',                   caption: 'Bulldogs vs Crows',          round: 1, grade: 'A-Grade'      },
-  { src: matchDayRunner,     alt: 'Match-day runner',                        caption: 'Match-day runner',           round: 5, grade: 'A-Grade'      },
-  { src: bulldogsInContest,  alt: 'Bulldogs in the contest',                 caption: 'Bulldogs in the contest',    round: 4, grade: 'A-Grade'      },
-  { src: quickHands,         alt: 'Quick hands disposing of the ball',       caption: 'Quick hands',                round: 3, grade: 'Senior Colts' },
-  { src: openFieldRunning,   alt: 'Open field running with the ball',        caption: 'Open field running',         round: 5, grade: 'B Grade'      },
-];
-
-// ── Supabase fetch ────────────────────────────────────────────────────────────
-const { data: dbPhotos, error: dbError } = await supabase
+// ── Supabase fetch — published photos only ────────────────────────────────────
+const { data: dbPhotos } = await supabase
   .from('gallery')
-  .select('id, url, alt, caption, round, season, display_order, created_at')
+  .select('id, url, alt, caption, round, grade, season, display_order, created_at')
   .eq('published', true)
   .order('display_order', { ascending: true })
   .order('created_at', { ascending: false });
+const photos = (dbPhotos ?? []) as DbPhoto[];
 
-const useDb = !dbError && Array.isArray(dbPhotos) && dbPhotos.length > 0;
-const photos = useDb ? (dbPhotos as DbPhoto[]) : null;
-
-// ── Build round filter options ────────────────────────────────────────────────
-// Show EVERY round of the season (from the fixtures), so all rounds appear on
-// the gallery even before photos have been uploaded for them.
+// ── Rounds + opponents from the fixtures table ────────────────────────────────
+// One opponent per round — all Wallaroo grades play the same club per round.
 const { data: fxRounds } = await supabase
   .from('fixtures')
-  .select('round, season')
+  .select('round, season, opponent')
   .not('round', 'is', null)
   .order('season', { ascending: false });
 const roundSeason: number = (fxRounds ?? [])[0]?.season ?? 2026;
-const allRoundNums = [...new Set((fxRounds ?? [])
-  .filter((f: any) => f.season === roundSeason)
-  .map((f: any) => f.round as number))].sort((a, b) => a - b);
-const rounds = ['All', ...(allRoundNums.length ? allRoundNums : [1, 2, 3, 4, 5]).map(r => `R${r}`)];
 
-// Season used for the per-round ZIP download links.
-const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? roundSeason) as number;
+const opponentByRound = new Map<number, string>();
+for (const f of (fxRounds ?? [])) {
+  if (f.season !== roundSeason || f.round == null) continue;
+  if (!opponentByRound.has(f.round) && f.opponent) opponentByRound.set(f.round, f.opponent);
+}
+// Include every round that has a fixture row for the season (byes have
+// opponent=null but still exist as scheduled rounds).
+const allRoundNums = [...new Set((fxRounds ?? [])
+  .filter((f: any) => f.season === roundSeason && f.round != null)
+  .map((f: any) => f.round as number))].sort((a, b) => a - b);
+const roundNums = allRoundNums.length ? allRoundNums : Array.from({ length: 18 }, (_, i) => i + 1);
+const season = roundSeason;
 ---
 <PageLayout
   title="Gallery · Wallaroo FC"
@@ -111,19 +77,20 @@ const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? 
         <div class="filter-group">
           <span class="filter-label">Round</span>
           <div class="filter-pills" data-filter-group="round">
-            {rounds.map((r, i) => (
-              <button class={`filter-pill${i === 0 ? ' active' : ''}`} data-filter-value={r}>{r}</button>
+            <button class="filter-pill active" data-filter-value="All">All</button>
+            {roundNums.map(n => (
+              <button class="filter-pill" data-filter-value={`R${n}`}>
+                R{n}{opponentByRound.get(n) ? ` v ${opponentByRound.get(n)}` : ' Bye'}
+              </button>
             ))}
           </div>
         </div>
-        {useDb && (
-          <a id="download-round" class="download-btn" data-season={season} download style="display:none"></a>
-        )}
+        <a id="download-round" class="download-btn" data-season={season} download style="display:none"></a>
       </div>
 
-      <div class="photo-grid">
-        {useDb && photos ? (
-          photos.map(p => (
+      {photos.length > 0 ? (
+        <div class="photo-grid">
+          {photos.map(p => (
             <figure
               class="photo"
               data-round={p.round != null ? `R${p.round}` : 'All'}
@@ -137,31 +104,23 @@ const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? 
               {(p.caption || p.round) && (
                 <figcaption>
                   {p.caption && <span class="caption">{p.caption}</span>}
-                  {p.round && <span class="meta">R{p.round}</span>}
+                  {p.round && (
+                    <span class="meta">
+                      R{p.round}{opponentByRound.has(p.round) ? ` v ${opponentByRound.get(p.round)}` : ''}
+                    </span>
+                  )}
                 </figcaption>
               )}
             </figure>
-          ))
-        ) : (
-          staticPhotos.map(p => (
-            <figure class="photo" data-round={`R${p.round}`}>
-              <Image
-                src={p.src}
-                alt={p.alt}
-                widths={[320, 640, 960, 1280]}
-                sizes="(max-width: 700px) 90vw, (max-width: 1100px) 45vw, 30vw"
-                loading="lazy"
-                decoding="async"
-                format="webp"
-              />
-              <figcaption>
-                <span class="caption">{p.caption}</span>
-                <span class="meta">R{p.round}</span>
-              </figcaption>
-            </figure>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div class="empty-state">
+          <div class="empty-icon">📷</div>
+          <h3>Photos coming soon</h3>
+          <p>The gallery fills up as the committee publishes photos from each round. Match photographers can send theirs in through <a href="/photos/upload">Upload photos</a>.</p>
+        </div>
+      )}
 
       <div class="cta">
         <p>More photos uploaded weekly. Got a great shot? Email it to <a href="mailto:admin@wallaroofc.com.au?subject=Gallery%20photo">admin@wallaroofc.com.au</a> or tag <strong>#BulldogsForever</strong>.</p>
@@ -248,7 +207,7 @@ const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? 
   .filter-group { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
   .filter-label { font-family: var(--headline); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--grey); }
   .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-  .filter-pill { background: var(--white); border: 1px solid var(--line); padding: 8px 16px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--charcoal); cursor: pointer; border-radius: 2px; transition: all 0.2s; }
+  .filter-pill { background: var(--white); border: 1px solid var(--line); padding: 8px 14px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--charcoal); cursor: pointer; border-radius: 2px; transition: all 0.2s; white-space: nowrap; }
   .filter-pill:hover { border-color: var(--red); color: var(--red); }
   .filter-pill.active { background: var(--red); color: var(--white); border-color: var(--red); }
   .download-btn { margin-left: auto; background: var(--red); color: var(--white); border: 1px solid var(--red); padding: 9px 18px; font-family: var(--headline); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 2px; cursor: pointer; text-decoration: none; white-space: nowrap; }
@@ -264,6 +223,21 @@ const season = ((useDb && photos && photos.length ? photos[0].season : null) ?? 
   .photo:hover figcaption { opacity: 1; }
   .photo .caption { display: block; font-family: var(--display); font-size: 16px; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 4px; }
   .photo .meta { font-family: var(--headline); font-size: 11px; letter-spacing: 0.14em; color: rgba(255,255,255,0.7); text-transform: uppercase; }
+
+  .empty-state {
+    text-align: center; padding: 96px 24px; background: var(--white);
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state h3 {
+    font-family: var(--display); font-size: 26px; letter-spacing: 0.02em;
+    text-transform: uppercase; color: var(--charcoal); margin: 0 0 8px;
+  }
+  .empty-state p {
+    font-family: var(--serif); font-size: 16px; color: var(--grey);
+    max-width: 480px; margin: 0 auto;
+  }
+  .empty-state a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
 
   .cta { margin-top: 56px; text-align: center; font-family: var(--serif); font-size: 17px; color: var(--grey); }
   .cta a { color: var(--red); border-bottom: 2px solid var(--red); padding-bottom: 1px; }
