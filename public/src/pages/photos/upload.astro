@@ -499,9 +499,11 @@ const seasonRoundsJson = JSON.stringify(seasonRounds);
     }
   }
 
+  const IMG_EXT = /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i;
   function addFiles(files: FileList | File[]) {
     for (const f of Array.from(files)) {
-      if (f.type.startsWith('image/')) selectedFiles.push(f);
+      // Accept by MIME OR extension — iPhone HEIC files often report a blank type.
+      if (f.type.startsWith('image/') || IMG_EXT.test(f.name)) selectedFiles.push(f);
     }
     renderFileList();
     updateSubmit();
@@ -520,32 +522,109 @@ const seasonRoundsJson = JSON.stringify(seasonRounds);
     if (dt?.files) addFiles(dt.files);
   });
 
+  // Shrink + convert each photo to a modest JPEG in the browser BEFORE upload.
+  // This keeps every request tiny (well under Vercel's 4.5 MB limit), converts
+  // iPhone HEIC to JPEG, honours EXIF orientation, and strips GPS metadata.
+  async function resizeToJpeg(file: File, maxEdge = 2000, quality = 0.82): Promise<Blob> {
+    let drawable: CanvasImageSource;
+    let w0 = 0, h0 = 0;
+    let bitmap: ImageBitmap | null = null;
+    try {
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+      drawable = bitmap; w0 = bitmap.width; h0 = bitmap.height;
+    } catch {
+      // Fallback decode via <img> — handles HEIC on iOS Safari.
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const im = new Image();
+        im.decoding = 'async';
+        im.onload = () => resolve(im);
+        im.onerror = () => reject(new Error('decode'));
+        im.src = URL.createObjectURL(file);
+      });
+      drawable = img; w0 = img.naturalWidth; h0 = img.naturalHeight;
+    }
+    if (!w0 || !h0) throw new Error('empty');
+    const scale = Math.min(1, maxEdge / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * scale));
+    const h = Math.max(1, Math.round(h0 * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas');
+    ctx.drawImage(drawable, 0, 0, w, h);
+    bitmap?.close?.();
+    const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality));
+    if (!blob) throw new Error('encode');
+    return blob;
+  }
+
   submit?.addEventListener('click', async () => {
-    if (!currentTier || !currentRound || !status) return;
+    if (!currentTier || !currentRound || !status || !submit) return;
+    const total = selectedFiles.length;
     submit.disabled = true;
     submit.textContent = 'Uploading…';
-    status.textContent = `Uploading ${selectedFiles.length} photo${selectedFiles.length === 1 ? '' : 's'}…`;
+    status.textContent = 'Preparing…';
 
-    const fd = new FormData();
-    fd.append('fixture_id', currentRound.fixture_id ?? '');
-    fd.append('round',      String(currentRound.round));
-    fd.append('grade',      TIER_LABEL[currentTier]);
-    fd.append('opponent',   currentRound.opponent  ?? '');
-    fd.append('venue',      currentRound.venue     ?? '');
-    fd.append('match_date', currentRound.match_date ?? '');
-    fd.append('note',       note?.value ?? '');
-    fd.append('consent_ack','true');
-    for (const f of selectedFiles) fd.append('files', f, f.name);
+    // 1. Start the batch
+    let batchId = '';
+    try {
+      const meta = new FormData();
+      meta.append('phase', 'start');
+      meta.append('fixture_id', currentRound.fixture_id ?? '');
+      meta.append('round',      String(currentRound.round));
+      meta.append('grade',      TIER_LABEL[currentTier]);
+      meta.append('opponent',   currentRound.opponent  ?? '');
+      meta.append('venue',      currentRound.venue     ?? '');
+      meta.append('match_date', currentRound.match_date ?? '');
+      meta.append('note',       note?.value ?? '');
+      meta.append('consent_ack','true');
+      const r = await fetch('/api/photos/upload', { method: 'POST', body: meta });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok || !j.batch_id) throw new Error(j.error || 'Could not start the upload.');
+      batchId = j.batch_id;
+    } catch (e) {
+      status.textContent = (e instanceof Error && e.message) ? e.message : 'Could not start the upload.';
+      submit.disabled = false; submit.textContent = 'Submit to Club';
+      return;
+    }
 
-    const res = await fetch('/api/photos/upload', { method: 'POST', body: fd });
-    const j = await res.json().catch(() => ({}));
+    // 2. Resize + upload each photo one request at a time
+    let uploaded = 0, failed = 0;
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const f = selectedFiles[i];
+      status.textContent = `Uploading ${i + 1} of ${total}…`;
+      try {
+        const jpeg = await resizeToJpeg(f);
+        const fd = new FormData();
+        fd.append('phase', 'file');
+        fd.append('batch_id', batchId);
+        fd.append('original_name', f.name);
+        fd.append('file', jpeg, (f.name.replace(/\.[a-z0-9]+$/i, '') || 'photo') + '.jpg');
+        const r = await fetch('/api/photos/upload', { method: 'POST', body: fd });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.ok) uploaded++; else failed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    // 3. Finish — record the final count
+    try {
+      const fin = new FormData();
+      fin.append('phase', 'finish');
+      fin.append('batch_id', batchId);
+      await fetch('/api/photos/upload', { method: 'POST', body: fin });
+    } catch { /* non-fatal */ }
+
     submit.textContent = 'Submit to Club';
-    if (!res.ok || !j.ok) {
-      status.textContent = j.error || 'Upload failed.';
+    if (uploaded === 0) {
+      status.textContent = `Upload failed — 0 of ${total} photos went through. Please try again.`;
       submit.disabled = false;
       return;
     }
-    status.textContent = `Uploaded ${j.uploaded} of ${selectedFiles.length}. Committee will review shortly.`;
+    status.textContent = failed
+      ? `Uploaded ${uploaded} of ${total} — ${failed} couldn't be read. The committee will review the rest.`
+      : `Uploaded ${uploaded} of ${total}. The committee will review them shortly.`;
     selectedFiles = [];
     renderFileList();
     if (fileInput) fileInput.value = '';
