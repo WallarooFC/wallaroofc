@@ -571,7 +571,9 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     }
 
     function renderQueue() {
-      previewQueue.style.display = files.length ? '' : 'none';
+      // Must be an explicit 'block' — the stylesheet rule `#preview-queue { display:none }`
+      // wins if we only clear the inline style with ''.
+      previewQueue.style.display = files.length ? 'block' : 'none';
       fileCountEl.textContent    = String(files.length);
       previewGrid.innerHTML      = '';
       files.forEach((f, i) => {
