@@ -232,8 +232,8 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
   <div class="upload-zone" id="drop-zone">
     <div class="uz-icon">🖼</div>
     <h3>Drag photos here or click to browse</h3>
-    <p>JPEG · PNG · WebP · max 10 MB per file · multiple files OK</p>
-    <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple />
+    <p>JPEG · PNG · WebP · HEIC · multiple files OK — big photos are shrunk automatically</p>
+    <input type="file" id="file-input" accept="image/*,.heic,.heif,.HEIC,.HEIF" multiple />
   </div>
 
   <!-- Preview + batch meta (hidden until files are selected) -->
@@ -442,13 +442,13 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     }
 
     // ── Upload to Supabase Storage via REST ───────────────────────────────────
-    async function uploadFile(file: File, path: string, token: string): Promise<string> {
+    async function uploadFile(file: Blob, path: string, token: string): Promise<string> {
       const res = await fetch(`${SUPA_URL}/storage/v1/object/gallery/${path}`, {
         method:  'POST',
         headers: {
           apikey:         SUPA_ANON,
           Authorization:  `Bearer ${token}`,
-          'Content-Type': file.type,
+          'Content-Type': file.type || 'image/jpeg',
           'x-upsert':     'false',
         },
         body: file,
@@ -487,7 +487,47 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     }
 
     // ── File queue ────────────────────────────────────────────────────────────
-    let files: File[] = [];
+    // Each item holds a browser-safe JPEG blob (converted from the original) so
+    // previews render, iPhone HEIC works, and every upload is well under limits.
+    type QueueItem = { name: string; blob: Blob };
+    let files: QueueItem[] = [];
+
+    const IMG_EXT = /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i;
+
+    // Shrink + convert any image to a modest JPEG in the browser before upload.
+    // Handles iPhone HEIC (Safari decodes it), bakes in EXIF orientation, and
+    // keeps every file small. Throws if the browser can't decode the source.
+    async function resizeToJpeg(file: File, maxEdge = 2400, quality = 0.85): Promise<Blob> {
+      let drawable: CanvasImageSource;
+      let w0 = 0, h0 = 0;
+      let bitmap: ImageBitmap | null = null;
+      try {
+        bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as any);
+        drawable = bitmap; w0 = bitmap.width; h0 = bitmap.height;
+      } catch {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const im = new Image();
+          im.decoding = 'async';
+          im.onload = () => resolve(im);
+          im.onerror = () => reject(new Error('decode'));
+          im.src = URL.createObjectURL(file);
+        });
+        drawable = img; w0 = img.naturalWidth; h0 = img.naturalHeight;
+      }
+      if (!w0 || !h0) throw new Error('empty');
+      const scale = Math.min(1, maxEdge / Math.max(w0, h0));
+      const w = Math.max(1, Math.round(w0 * scale));
+      const h = Math.max(1, Math.round(h0 * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas');
+      ctx.drawImage(drawable, 0, 0, w, h);
+      bitmap?.close?.();
+      const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality));
+      if (!blob) throw new Error('encode');
+      return blob;
+    }
 
     const dropZone     = document.getElementById('drop-zone')!;
     const fileInput    = document.getElementById('file-input') as HTMLInputElement;
@@ -513,11 +553,27 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       fileInput.value = '';
     });
 
-    function addFiles(incoming: File[]) {
-      const valid   = incoming.filter(f => f.type.startsWith('image/') && f.size <= 10 * 1024 * 1024);
-      const skipped = incoming.length - valid.length;
-      if (skipped > 0) showToast(`${skipped} file(s) skipped — must be an image under 10 MB`, 'error');
-      files.push(...valid);
+    async function addFiles(incoming: File[]) {
+      const imgs    = incoming.filter(f => f.type.startsWith('image/') || IMG_EXT.test(f.name));
+      const skipped = incoming.length - imgs.length;
+      if (skipped > 0) showToast(`${skipped} non-image file(s) skipped`, 'error');
+      let failed = 0;
+      for (const f of imgs) {
+        try {
+          const jpeg = await resizeToJpeg(f);
+          const stem = f.name.replace(/\.[a-z0-9]+$/i, '') || 'photo';
+          files.push({ name: `${stem}.jpg`, blob: jpeg });
+        } catch {
+          // Some browsers (desktop Chrome) can't decode HEIC at all. Fall back
+          // to the original if it's already a web-safe image under 10 MB.
+          if (/\.(jpe?g|png|webp|gif)$/i.test(f.name) && f.size <= 10 * 1024 * 1024) {
+            files.push({ name: f.name, blob: f });
+          } else {
+            failed++;
+          }
+        }
+      }
+      if (failed > 0) showToast(`${failed} photo(s) couldn't be read here — if they're HEIC, convert to JPEG first`, 'error');
       renderQueue();
     }
 
@@ -526,7 +582,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       fileCountEl.textContent    = String(files.length);
       previewGrid.innerHTML      = '';
       files.forEach((f, i) => {
-        const url = URL.createObjectURL(f);
+        const url = URL.createObjectURL(f.blob);
         const div = document.createElement('div');
         div.className = 'preview-thumb';
         div.innerHTML = `
@@ -571,13 +627,15 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       progressBar.style.width  = '0%';
       let done = 0;
 
-      for (const file of files) {
+      for (const item of files) {
         try {
-          progressLbl.textContent = `Uploading ${file.name}…`;
-          const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+          progressLbl.textContent = `Uploading ${item.name}…`;
+          const ext  = (item.blob.type === 'image/png') ? 'png'
+                     : (item.blob.type === 'image/webp') ? 'webp'
+                     : (item.blob.type === 'image/gif') ? 'gif' : 'jpg';
           const uid  = Date.now().toString(36) + Math.random().toString(36).slice(2);
           const path = `${season}/${uid}.${ext}`;
-          const url  = await uploadFile(file, path, token);
+          const url  = await uploadFile(item.blob, path, token);
           await insertRow({
             season,
             round:         round ? parseInt(round) : null,
@@ -592,7 +650,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           done++;
           progressBar.style.width = `${Math.round((done / files.length) * 100)}%`;
         } catch (err: any) {
-          showToast(`Failed: ${file.name} — ${err.message}`, 'error');
+          showToast(`Failed: ${item.name} — ${err.message}`, 'error');
         }
       }
 
