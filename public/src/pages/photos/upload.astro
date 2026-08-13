@@ -499,11 +499,15 @@ const seasonRoundsJson = JSON.stringify(seasonRounds);
     }
   }
 
-  const IMG_EXT = /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i;
+  const NON_IMG_EXT = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z|mp4|mov|avi|mkv|mp3|wav)$/i;
   function addFiles(files: FileList | File[]) {
     for (const f of Array.from(files)) {
-      // Accept by MIME OR extension — iPhone HEIC files often report a blank type.
-      if (f.type.startsWith('image/') || IMG_EXT.test(f.name)) selectedFiles.push(f);
+      // Accept anything that isn't clearly a non-image. Photos downloaded from
+      // Facebook (and elsewhere) often have NO extension and a blank MIME type,
+      // so filtering on image/* or a known image extension silently drops them.
+      // The actual JPEG conversion at submit time is the real arbiter.
+      const clearlyNotImage = f.type && !f.type.startsWith('image/');
+      if (!clearlyNotImage && !NON_IMG_EXT.test(f.name)) selectedFiles.push(f);
     }
     renderFileList();
     updateSubmit();

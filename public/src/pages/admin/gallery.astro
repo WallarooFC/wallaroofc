@@ -492,8 +492,6 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     type QueueItem = { name: string; blob: Blob };
     let files: QueueItem[] = [];
 
-    const IMG_EXT = /\.(jpe?g|png|webp|gif|heic|heif|bmp|tiff?)$/i;
-
     // Shrink + convert any image to a modest JPEG in the browser before upload.
     // Handles iPhone HEIC (Safari decodes it), bakes in EXIF orientation, and
     // keeps every file small. Throws if the browser can't decode the source.
@@ -554,18 +552,21 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     });
 
     async function addFiles(incoming: File[]) {
-      const imgs    = incoming.filter(f => f.type.startsWith('image/') || IMG_EXT.test(f.name));
-      const skipped = incoming.length - imgs.length;
-      if (skipped > 0) showToast(`${skipped} non-image file(s) skipped`, 'error');
+      // Try to decode EVERY selected file — do NOT pre-filter on name/MIME. Photos
+      // downloaded from Facebook (and many other sources) arrive with no extension
+      // AND an empty MIME type, so a name/type filter silently drops them.
+      // resizeToJpeg actually decodes the bytes, so it's the real arbiter of "is
+      // this an image?".
       let failed = 0;
-      for (const f of imgs) {
+      for (const f of incoming) {
         try {
           const jpeg = await resizeToJpeg(f);
           const stem = f.name.replace(/\.[a-z0-9]+$/i, '') || 'photo';
           files.push({ name: `${stem}.jpg`, blob: jpeg });
         } catch {
-          // Some browsers (desktop Chrome) can't decode HEIC at all. Fall back
-          // to the original if it's already a web-safe image under 10 MB.
+          // Couldn't decode. If it's already a web-safe image under 10 MB, send it
+          // as-is; otherwise skip (a genuine non-image, or HEIC on a desktop browser
+          // that can't decode it).
           if (/\.(jpe?g|png|webp|gif)$/i.test(f.name) && f.size <= 10 * 1024 * 1024) {
             files.push({ name: f.name, blob: f });
           } else {
@@ -573,7 +574,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
           }
         }
       }
-      if (failed > 0) showToast(`${failed} photo(s) couldn't be read here — if they're HEIC, convert to JPEG first`, 'error');
+      if (failed > 0) showToast(`${failed} file(s) couldn't be read as images — if they're HEIC, convert to JPEG first`, 'error');
       renderQueue();
     }
 
