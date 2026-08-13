@@ -418,6 +418,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
   <div class="toast" id="toast"></div>
 
   <script>
+    console.log('[wfc-gallery] uploader script v5 starting');
     // ── Credentials ───────────────────────────────────────────────────────────
     const cfg       = document.getElementById('gallery-config') as HTMLElement;
     const SUPA_URL  = cfg.dataset.url!;
@@ -487,9 +488,10 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
     }
 
     // ── File queue ────────────────────────────────────────────────────────────
-    // Each item holds a browser-safe JPEG blob (converted from the original) so
-    // previews render, iPhone HEIC works, and every upload is well under limits.
-    type QueueItem = { name: string; blob: Blob };
+    // The queue holds the ORIGINAL File. Adding is fully synchronous so selection
+    // ALWAYS populates the preview instantly — there is no async step that can
+    // stall. The shrink-to-JPEG happens later, at upload time.
+    type QueueItem = { name: string; file: File };
     let files: QueueItem[] = [];
 
     // Shrink + convert any image to a modest JPEG in the browser before upload.
@@ -551,30 +553,20 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       fileInput.value = '';
     });
 
-    async function addFiles(incoming: File[]) {
-      // Try to decode EVERY selected file — do NOT pre-filter on name/MIME. Photos
-      // downloaded from Facebook (and many other sources) arrive with no extension
-      // AND an empty MIME type, so a name/type filter silently drops them.
-      // resizeToJpeg actually decodes the bytes, so it's the real arbiter of "is
-      // this an image?".
-      let failed = 0;
+    // Synchronous. Accept anything that isn't clearly a non-image; whether it
+    // decodes is decided later, at upload time. This guarantees the preview
+    // populates the instant files are chosen.
+    const NON_IMG_EXT = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z|mp4|mov|avi|mkv|mp3|wav)$/i;
+    function addFiles(incoming: File[]) {
+      console.log('[wfc-gallery] addFiles called with', incoming.length, 'file(s)');
+      let skipped = 0;
       for (const f of incoming) {
-        try {
-          const jpeg = await resizeToJpeg(f);
-          const stem = f.name.replace(/\.[a-z0-9]+$/i, '') || 'photo';
-          files.push({ name: `${stem}.jpg`, blob: jpeg });
-        } catch {
-          // Couldn't decode. If it's already a web-safe image under 10 MB, send it
-          // as-is; otherwise skip (a genuine non-image, or HEIC on a desktop browser
-          // that can't decode it).
-          if (/\.(jpe?g|png|webp|gif)$/i.test(f.name) && f.size <= 10 * 1024 * 1024) {
-            files.push({ name: f.name, blob: f });
-          } else {
-            failed++;
-          }
-        }
+        const clearlyNotImage = (f.type && !f.type.startsWith('image/')) || NON_IMG_EXT.test(f.name);
+        if (clearlyNotImage) { skipped++; continue; }
+        files.push({ name: f.name, file: f });
       }
-      if (failed > 0) showToast(`${failed} file(s) couldn't be read as images — if they're HEIC, convert to JPEG first`, 'error');
+      console.log('[wfc-gallery] queue now has', files.length, 'file(s);', skipped, 'skipped');
+      if (skipped > 0) showToast(`${skipped} non-image file(s) skipped`, 'error');
       renderQueue();
     }
 
@@ -583,7 +575,7 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       fileCountEl.textContent    = String(files.length);
       previewGrid.innerHTML      = '';
       files.forEach((f, i) => {
-        const url = URL.createObjectURL(f.blob);
+        const url = URL.createObjectURL(f.file);
         const div = document.createElement('div');
         div.className = 'preview-thumb';
         div.innerHTML = `
@@ -631,12 +623,19 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
       for (const item of files) {
         try {
           progressLbl.textContent = `Uploading ${item.name}…`;
-          const ext  = (item.blob.type === 'image/png') ? 'png'
-                     : (item.blob.type === 'image/webp') ? 'webp'
-                     : (item.blob.type === 'image/gif') ? 'gif' : 'jpg';
+          // Shrink to JPEG now. If the browser can't decode it (rare), fall back
+          // to uploading the original file untouched so the upload still succeeds.
+          let body: Blob = item.file;
+          let ext = 'jpg';
+          try {
+            body = await resizeToJpeg(item.file);
+          } catch {
+            const m = item.name.match(/\.(png|webp|gif|jpe?g)$/i);
+            ext = m ? m[1].toLowerCase().replace('jpeg', 'jpg') : 'jpg';
+          }
           const uid  = Date.now().toString(36) + Math.random().toString(36).slice(2);
           const path = `${season}/${uid}.${ext}`;
-          const url  = await uploadFile(item.blob, path, token);
+          const url  = await uploadFile(body, path, token);
           await insertRow({
             season,
             round:         round ? parseInt(round) : null,
