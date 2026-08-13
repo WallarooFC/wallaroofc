@@ -575,10 +575,14 @@ const supabaseAnon = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
         const url = URL.createObjectURL(f.file);
         const div = document.createElement('div');
         div.className = 'preview-thumb';
+        // Inline styles: these nodes are created in JS, so Astro's scoped
+        // <style> rules never apply to them. Without this the thumbnails
+        // render as full-height slivers.
+        div.style.cssText = 'position:relative;height:150px;border-radius:4px;overflow:hidden;background:#081426';
         div.innerHTML = `
-          <img src="${url}" alt="" />
-          <span class="preview-name">${f.name}</span>
-          <button class="preview-remove" data-i="${i}" title="Remove">✕</button>
+          <img src="${url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block" />
+          <span style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.7);font-size:9px;padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff">${f.name}</span>
+          <button class="preview-remove" data-i="${i}" title="Remove" style="position:absolute;top:4px;right:4px;background:#C8102E;border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">✕</button>
         `;
         previewGrid.appendChild(div);
       });
