@@ -72,9 +72,16 @@ if (Astro.request.method === 'POST' && canEdit) {
         });
         if (error) throw error;
       } else {
+        // Preserve any structured "flyer" fields (layout, menu, titleTop, …) that
+        // this form doesn't manage, so editing a flyer template doesn't wipe it.
+        const tid = String(form.get('template_id'));
+        const { data: existing } = await db.from('templates').select('body').eq('id', tid).single();
+        const managed = ['kind','heading','body','ctaLabel','ctaUrl','imageUrl','scale','rotate','rotateDeg','glam','holdMs'];
+        const preserved: Record<string, unknown> = { ...((existing?.body as any) ?? {}) };
+        for (const k of managed) delete preserved[k];
         const { error } = await db.from('templates')
-          .update({ title, body })
-          .eq('id', String(form.get('template_id')));
+          .update({ title, body: { ...preserved, ...body } })
+          .eq('id', tid);
         if (error) throw error;
       }
     } else if (action === 'delete_template') {

@@ -123,6 +123,36 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
           "#" + ROOT_ID + " .wfc-text{font-size:16px;line-height:1.6;margin:0 auto;max-width:42ch;color:rgba(255,255,255,0.85);}" +
           "#" + ROOT_ID + " .wfc-cta{display:inline-block;margin-top:22px;background:#C8102E;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;letter-spacing:0.02em;}" +
           "#" + ROOT_ID + " .wfc-cta:hover{background:#8E0B20;}" +
+          "#" + ROOT_ID + " .wfc-card-flyer{max-width:440px;background:linear-gradient(165deg,#0A1F3D 0%,#050E1F 58%,#0A0F1F 100%);border:1px solid rgba(255,255,255,0.08);border-left:5px solid #C8102E;}" +
+          "#" + ROOT_ID + " .wfc-flyer{padding:30px 30px 24px;color:#F0F4F8;text-align:left;}" +
+          "#" + ROOT_ID + " .wfc-fly-eyebrow{font-family:'Bebas Neue','Arial Narrow',sans-serif;font-size:13px;letter-spacing:0.22em;color:#C8102E;text-transform:uppercase;margin:0 0 10px;display:flex;align-items:center;gap:10px;}" +
+          "#" + ROOT_ID + " .wfc-fly-eyebrow:before{content:'';width:26px;height:2px;background:#C8102E;}" +
+          "#" + ROOT_ID + " .wfc-fly-title{font-family:'Anton',Impact,sans-serif;font-weight:400;line-height:0.9;text-transform:uppercase;margin:0 0 12px;}" +
+          "#" + ROOT_ID + " .wfc-fly-title .t1{display:block;font-size:52px;color:#fff;}" +
+          "#" + ROOT_ID + " .wfc-fly-title .t2{display:block;font-size:52px;color:#C8102E;}" +
+          "#" + ROOT_ID + " .wfc-fly-sub{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:17px;color:rgba(255,255,255,0.72);margin:0 0 16px;}" +
+          "#" + ROOT_ID + " .wfc-fly-time{display:inline-flex;align-items:baseline;gap:8px;background:#C8102E;color:#fff;padding:9px 16px;border-radius:3px;margin-bottom:22px;}" +
+          "#" + ROOT_ID + " .wfc-fly-time .lbl{font-family:'Bebas Neue','Arial Narrow',sans-serif;letter-spacing:0.14em;font-size:14px;}" +
+          "#" + ROOT_ID + " .wfc-fly-time .val{font-family:'Anton',Impact,sans-serif;font-size:26px;line-height:1;}" +
+          "#" + ROOT_ID + " .wfc-fly-time .suf{font-family:'Bebas Neue','Arial Narrow',sans-serif;font-size:14px;letter-spacing:0.1em;}" +
+          "#" + ROOT_ID + " .wfc-fly-mhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;gap:12px;}" +
+          "#" + ROOT_ID + " .wfc-fly-mhead .mh{font-family:'Bebas Neue','Arial Narrow',sans-serif;letter-spacing:0.2em;color:#C8102E;font-size:15px;text-transform:uppercase;}" +
+          "#" + ROOT_ID + " .wfc-fly-mhead .mn{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:12px;color:rgba(255,255,255,0.55);text-align:right;}" +
+          "#" + ROOT_ID + " .wfc-fly-menu{list-style:none;margin:0 0 16px;padding:12px 0 0;border-top:1px solid rgba(255,255,255,0.14);}" +
+          "#" + ROOT_ID + " .wfc-fly-menu li{display:flex;align-items:baseline;gap:8px;margin:0 0 13px;}" +
+          "#" + ROOT_ID + " .wfc-fly-menu .n{font-family:Inter,system-ui,sans-serif;font-weight:600;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:0.01em;}" +
+          "#" + ROOT_ID + " .wfc-fly-menu .lead{flex:1;border-bottom:1px dotted rgba(255,255,255,0.3);transform:translateY(-4px);}" +
+          "#" + ROOT_ID + " .wfc-fly-menu .p{font-family:'Anton',Impact,sans-serif;font-size:22px;color:#C8102E;white-space:nowrap;}" +
+          "#" + ROOT_ID + " .wfc-fly-plus{border-left:3px solid #C8102E;background:rgba(200,16,46,0.09);padding:8px 12px;font-size:14px;margin-bottom:18px;border-radius:0 4px 4px 0;}" +
+          "#" + ROOT_ID + " .wfc-fly-plus b{color:#C8102E;margin-right:4px;}" +
+          "#" + ROOT_ID + " .wfc-fly-plus i{font-family:'Fraunces',Georgia,serif;color:rgba(255,255,255,0.82);}" +
+          "#" + ROOT_ID + " .wfc-fly-foot{display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid rgba(255,255,255,0.14);padding-top:14px;gap:12px;}" +
+          "#" + ROOT_ID + " .wfc-fly-foot .fl b{display:block;font-family:'Bebas Neue','Arial Narrow',sans-serif;letter-spacing:0.05em;font-size:17px;color:#fff;}" +
+          "#" + ROOT_ID + " .wfc-fly-foot .fl i{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:11px;color:rgba(255,255,255,0.5);}" +
+          "#" + ROOT_ID + " .wfc-fly-foot .fr{text-align:right;flex-shrink:0;}" +
+          "#" + ROOT_ID + " .wfc-fly-foot .fr span{display:block;font-family:'Bebas Neue','Arial Narrow',sans-serif;letter-spacing:0.14em;font-size:10px;color:rgba(255,255,255,0.4);}" +
+          "#" + ROOT_ID + " .wfc-fly-foot .fr b{font-family:'Bebas Neue','Arial Narrow',sans-serif;letter-spacing:0.05em;font-size:14px;color:#fff;}" +
+          "@media(max-width:460px){#" + ROOT_ID + " .wfc-fly-title .t1,#" + ROOT_ID + " .wfc-fly-title .t2{font-size:42px;}#" + ROOT_ID + " .wfc-flyer{padding:24px 22px 20px;}}" +
           "@keyframes wfc-rock{0%{transform:rotate(calc(var(--wfc-rock-angle,45deg)*-1));}50%{transform:rotate(var(--wfc-rock-angle,45deg));}100%{transform:rotate(calc(var(--wfc-rock-angle,45deg)*-1));}}" +
           "@keyframes wfc-glow{0%,100%{box-shadow:0 20px 60px rgba(5,14,31,0.6);}50%{box-shadow:0 0 46px rgba(46,110,255,0.6),0 0 84px rgba(200,16,46,0.55),0 20px 60px rgba(5,14,31,0.6);}}" +
           "#" + ROOT_ID + " .wfc-spin{animation:wfc-rock 12s ease-in-out infinite;transform-origin:center;}" +
@@ -141,6 +171,42 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
           .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
       }
 
+      // Structured "flyer" layout — mirrors the club meal-flyer design so a
+      // takeover looks like the printed flyer but stays fully data-driven.
+      function flyerHtml(d) {
+        var menu = Array.isArray(d.menu) ? d.menu : [];
+        var rows = menu.map(function (m) {
+          return '<li><span class="n">' + esc(m.n || m.item || "") + '</span>' +
+                 '<span class="lead"></span>' +
+                 '<span class="p">' + esc(m.p || m.price || "") + '</span></li>';
+        }).join("");
+        var timeHtml = d.timeValue
+          ? '<div class="wfc-fly-time"><span class="lbl">' + esc(d.timeFrom || "From") + '</span>' +
+            '<span class="val">' + esc(d.timeValue) + '</span>' +
+            (d.timeSuffix ? '<span class="suf">' + esc(d.timeSuffix) + '</span>' : "") + '</div>'
+          : "";
+        var plusHtml = d.plusNote
+          ? '<div class="wfc-fly-plus"><b>' + esc(d.plusLabel || "Plus") + '</b> <i>' + esc(d.plusNote) + '</i></div>'
+          : "";
+        var noteHtml = d.menuNote ? '<span class="mn">' + esc(d.menuNote) + '</span>' : "";
+        return '<div class="wfc-flyer">' +
+          '<div class="wfc-fly-eyebrow">' + esc(d.eyebrow || "This week after training") + '</div>' +
+          '<h2 class="wfc-fly-title"><span class="t1">' + esc(d.titleTop || "") + '</span>' +
+            '<span class="t2">' + esc(d.titleBottom || "") + '</span></h2>' +
+          (d.subtitle ? '<p class="wfc-fly-sub">' + esc(d.subtitle) + '</p>' : "") +
+          timeHtml +
+          '<div class="wfc-fly-mhead"><span class="mh">' + esc(d.menuHeading || "The Menu") + '</span>' + noteHtml + '</div>' +
+          '<ul class="wfc-fly-menu">' + rows + '</ul>' +
+          plusHtml +
+          '<div class="wfc-fly-foot">' +
+            '<div class="fl"><b>' + esc(d.footTitle || "Wallaroo Football Club") + '</b>' +
+              '<i>' + esc(d.footTag || "Tradition lives here · Est. 1867") + '</i></div>' +
+            '<div class="fr"><span>' + esc(d.footRLabel || "Clubrooms") + '</span>' +
+              '<b>' + esc(d.footRValue || "Wallaroo Oval") + '</b></div>' +
+          '</div>' +
+        '</div>';
+      }
+
       function render(body) {
         if (!body) return;
         injectStylesOnce();
@@ -153,7 +219,14 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
         root.setAttribute("aria-modal", "true");
         root.setAttribute("aria-label", "Wallaroo FC announcement");
 
-        if (body.imageUrl) {
+        if (body.layout === "flyer") {
+          root.innerHTML =
+            '<div class="wfc-backdrop"></div>' +
+            '<div class="wfc-card wfc-card-flyer">' +
+              '<button type="button" class="wfc-close" aria-label="Dismiss">&times;</button>' +
+              flyerHtml(body) +
+            '</div>';
+        } else if (body.imageUrl) {
           var img = '<img class="wfc-img" src="' + esc(body.imageUrl) + '" alt="' + esc(body.heading || "Wallaroo FC") + '"/>';
           var inner = body.ctaUrl
             ? '<a href="' + esc(body.ctaUrl) + '" rel="noopener">' + img + '</a>'
