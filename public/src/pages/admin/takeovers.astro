@@ -42,7 +42,11 @@ if (Astro.request.method === 'POST' && canEdit) {
 
   try {
     if (action === 'create_template' || action === 'update_template') {
-      const body = {
+      // Presentation ("glitz") controls — these drive the flyer-image format
+      // with enlarge / rock / glow, matching the seeded Thursday Night & Ball
+      // takeovers. Rebuilt in full on every save (the form is pre-filled with
+      // existing values), so editing no longer silently strips the animation.
+      const body: Record<string, unknown> = {
         kind: 'takeover',
         heading: String(form.get('heading') ?? '').trim(),
         body: String(form.get('body') ?? '').trim(),
@@ -50,6 +54,17 @@ if (Astro.request.method === 'POST' && canEdit) {
         ctaUrl: String(form.get('ctaUrl') ?? '').trim() || null,
         imageUrl: String(form.get('imageUrl') ?? '').trim() || null,
       };
+      const scale     = parseFloat(String(form.get('scale') ?? ''));
+      const rotateDeg = parseInt(String(form.get('rotateDeg') ?? ''), 10);
+      const holdSecs  = parseFloat(String(form.get('holdSecs') ?? ''));
+      if (!isNaN(scale) && scale > 0 && scale !== 1) body.scale = scale;
+      if (form.get('rotate')) {
+        body.rotate = true;
+        if (!isNaN(rotateDeg) && rotateDeg > 0) body.rotateDeg = rotateDeg;
+      }
+      if (form.get('glam')) body.glam = true;
+      if (!isNaN(holdSecs) && holdSecs > 0) body.holdMs = Math.round(holdSecs * 1000);
+
       const title = String(form.get('title') ?? '').trim();
       if (action === 'create_template') {
         const { error } = await db.from('templates').insert({
@@ -209,6 +224,16 @@ function statusOf(t: any): { label: string; cls: string } {
                 <label>CTA URL<input type="url" name="ctaUrl" value={tpl.body?.ctaUrl ?? ''}/></label>
               </div>
               <label>Image URL (optional)<input type="url" name="imageUrl" value={tpl.body?.imageUrl ?? ''} placeholder="https://wallaroofc.com/takeover/thursday-night.png"/></label>
+              <p class="hint">Set an image to show the flyer as the whole popup — that's the "format" the Thursday Night &amp; Ball takeovers use. The controls below add the enlarge / rock / glow.</p>
+              <div class="grid3">
+                <label>Enlarge (× size)<input type="number" name="scale" min="1" max="2.5" step="0.05" value={tpl.body?.scale ?? ''} placeholder="1.5"/></label>
+                <label>Rock angle (°)<input type="number" name="rotateDeg" min="0" max="90" step="5" value={tpl.body?.rotateDeg ?? ''} placeholder="25"/></label>
+                <label>Hold (seconds)<input type="number" name="holdSecs" min="1" max="60" step="1" value={tpl.body?.holdMs ? Math.round(tpl.body.holdMs / 1000) : ''} placeholder="10"/></label>
+              </div>
+              <div class="checks">
+                <label class="chk"><input type="checkbox" name="rotate" checked={!!tpl.body?.rotate}/> Rock (rotate back &amp; forth)</label>
+                <label class="chk"><input type="checkbox" name="glam" checked={!!tpl.body?.glam}/> Glam glow</label>
+              </div>
               <div class="tpl-actions">
                 <button class="btn primary" type="submit">Save</button>
               </div>
@@ -242,6 +267,16 @@ function statusOf(t: any): { label: string; cls: string } {
           <label>CTA URL<input type="url" name="ctaUrl" placeholder="https://wallaroofc.com/…"/></label>
         </div>
         <label>Image URL (optional)<input type="url" name="imageUrl" placeholder="https://wallaroofc.com/takeover/thursday-night.png"/></label>
+        <p class="hint">Set an image to show the flyer as the whole popup — that's the "format" the Thursday Night &amp; Ball takeovers use. The controls below add the enlarge / rock / glow.</p>
+        <div class="grid3">
+          <label>Enlarge (× size)<input type="number" name="scale" min="1" max="2.5" step="0.05" placeholder="1.5"/></label>
+          <label>Rock angle (°)<input type="number" name="rotateDeg" min="0" max="90" step="5" placeholder="25"/></label>
+          <label>Hold (seconds)<input type="number" name="holdSecs" min="1" max="60" step="1" placeholder="10"/></label>
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" name="rotate"/> Rock (rotate back &amp; forth)</label>
+          <label class="chk"><input type="checkbox" name="glam"/> Glam glow</label>
+        </div>
         <button class="btn primary" type="submit">Create template</button>
       </form>
     )}
@@ -284,6 +319,10 @@ function statusOf(t: any): { label: string; cls: string } {
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 14px; }
   @media (max-width: 700px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .hint { font-size: 12px; color: rgba(255,255,255,0.45); margin: -4px 0 12px; text-transform: none; letter-spacing: normal; }
+  .checks { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 14px; }
+  .chk { flex-direction: row; align-items: center; gap: 8px; text-transform: none; letter-spacing: normal; font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 0; }
+  .chk input { width: 16px; height: 16px; accent-color: #C8102E; padding: 0; }
 
   .tpl-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
   details.tpl { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 14px; }
