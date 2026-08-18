@@ -158,7 +158,9 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
           "#" + ROOT_ID + " .wfc-spin{animation:wfc-rock 12s ease-in-out infinite;transform-origin:center;}" +
           "#" + ROOT_ID + " .wfc-glam{animation:wfc-glow 2.6s ease-in-out infinite;}" +
           "#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-rock 12s ease-in-out infinite,wfc-glow 2.6s ease-in-out infinite;}" +
-          "@media(prefers-reduced-motion:reduce){#" + ROOT_ID + " .wfc-spin{animation:none;}#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-glow 2.6s ease-in-out infinite;}}";
+          "@keyframes wfc-drift{0%{transform:translate(0,0);}20%{transform:translate(7vw,-6vh);}40%{transform:translate(-6vw,5vh);}60%{transform:translate(6vw,7vh);}80%{transform:translate(-7vw,-5vh);}100%{transform:translate(0,0);}}" +
+          "#" + ROOT_ID + " .wfc-float{animation:wfc-drift 18s ease-in-out infinite;}" +
+          "@media(prefers-reduced-motion:reduce){#" + ROOT_ID + " .wfc-spin{animation:none;}#" + ROOT_ID + " .wfc-spin.wfc-glam{animation:wfc-glow 2.6s ease-in-out infinite;}#" + ROOT_ID + " .wfc-float{animation:none;}}";
         var s = document.createElement("style");
         s.id = STYLE_ID;
         s.textContent = css;
@@ -270,6 +272,9 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? 'htt
             fxTarget.style.setProperty("--wfc-rock-angle", body.rotateDeg + "deg");
           }
         }
+        // Optional gentle drift around the screen. Applied to the whole card, so
+        // it composes with a rocking image inside (which animates separately).
+        if (body.float && card) card.classList.add("wfc-float");
 
         document.body.appendChild(root);
 
